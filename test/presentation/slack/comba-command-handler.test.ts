@@ -9,6 +9,47 @@ import type { CombaCommand } from "@comba/presentation/slack/schemas/command";
 afterEach(() => vi.restoreAllMocks());
 
 describe("CombaCommandHandler", () => {
+  it("runs the hidden leaderboard List sync for an administrator", async () => {
+    const { dependencies } = setup();
+    const leaderboardLists = {
+      sync: vi.fn(async () => ({
+        created: true,
+        listId: "F1",
+        rows: 4,
+        syncedAt: "2026-08-30T12:00:00Z",
+      })),
+    };
+    const handler = new CombaCommandHandler(
+      dependencies.sessionService as never,
+      dependencies.statisticsService as never,
+      dependencies.slackClient,
+      leaderboardLists as never,
+      new Set(["U-MARIO"]),
+    );
+    const response = await handler.handle(command({ text: "admin list sync" }));
+    expect(leaderboardLists.sync).toHaveBeenCalledWith("T-PERSONAL", "C-COMBA");
+    await expect(response.json()).resolves.toMatchObject({
+      text: expect.stringContaining("wrote 4 rows"),
+    });
+  });
+
+  it("rejects hidden leaderboard List sync for other users", async () => {
+    const { dependencies } = setup();
+    const leaderboardLists = { sync: vi.fn() };
+    const handler = new CombaCommandHandler(
+      dependencies.sessionService as never,
+      dependencies.statisticsService as never,
+      dependencies.slackClient,
+      leaderboardLists as never,
+      new Set(),
+    );
+    const response = await handler.handle(command({ text: "admin list sync" }));
+    expect(leaderboardLists.sync).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({
+      text: expect.stringContaining("administrator"),
+    });
+  });
+
   it("renders every player in the global leaderboard", async () => {
     const { dependencies, statisticsService } = setup();
     const response = await handleCombaCommand(
@@ -102,6 +143,7 @@ describe("CombaCommandHandler", () => {
 
     const body = (await response.json()) as { text: string };
     expect(body.text).toContain("Ċomba commands");
+    expect(body.text).not.toContain("admin list sync");
     expect(repository.create).not.toHaveBeenCalled();
   });
 
@@ -244,9 +286,8 @@ function setup() {
         workspaceId: string;
       }) => {
         if (input.channelId !== "C-COMBA") {
-          const { SessionChannelNotAllowedError } = await import(
-            "@comba/application/session-errors"
-          );
+          const { SessionChannelNotAllowedError } =
+            await import("@comba/application/session-errors");
           throw new SessionChannelNotAllowedError();
         }
         return repository.create({
@@ -336,6 +377,8 @@ function handleCombaCommand(
     dependencies.sessionService as never,
     dependencies.statisticsService as never,
     dependencies.slackClient,
+    { sync: vi.fn() } as never,
+    new Set(),
   ).handle(command);
 }
 

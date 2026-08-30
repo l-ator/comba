@@ -12,6 +12,8 @@ import {
   ResultSessionNotEligibleError,
 } from "@comba/domain/result/errors";
 import type { ResultMutation } from "./models/result-mutation";
+import { LeaderboardListService } from "./leaderboard-list-service";
+import { errorDetails } from "@shared/observability/error-details";
 
 export interface ResultActorInput {
   channelId: string;
@@ -35,6 +37,8 @@ export class ResultService {
     @inject(TOKENS.gameHistory)
     private readonly history: GameHistoryPort,
     @inject(TOKENS.now) private readonly now: () => Date = () => new Date(),
+    @inject(LeaderboardListService)
+    private readonly leaderboardLists: LeaderboardListService,
   ) {}
 
   async prepare(input: ResultActorInput) {
@@ -90,7 +94,7 @@ export class ResultService {
     if (pending.ok) return mutationToView(pending.value);
     if (pending.error.code !== "SESSION_NOT_FOUND") throw mapFailure(pending);
 
-    return mutationToView(
+    const mutation = mutationToView(
       await this.history.amend(
         input.sessionId,
         input.workspaceId,
@@ -99,6 +103,15 @@ export class ResultService {
         at,
       ),
     );
+    try {
+      await this.leaderboardLists.sync(input.workspaceId, input.channelId);
+    } catch (error) {
+      console.error("Failed to synchronize Ċomba leaderboard after amendment", {
+        error: errorDetails(error),
+        sessionId: input.sessionId,
+      });
+    }
+    return mutation;
   }
 }
 

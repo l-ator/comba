@@ -14,6 +14,7 @@ import type {
   TeammateStatistics,
 } from "@comba/domain/statistics/model";
 import { StatisticsService } from "@comba/application/statistics-service";
+import { LeaderboardListService } from "@comba/application/leaderboard-list-service";
 import type { SlackClient, SlackMessageReference } from "./slack-client";
 import type { CombaCommand } from "./schemas/command";
 import { renderOpenLobby } from "./views/lobby";
@@ -25,10 +26,27 @@ export class CombaCommandHandler {
     @inject(StatisticsService)
     private readonly statisticsService: StatisticsService,
     @inject(TOKENS.slackClient) private readonly slackClient: SlackClient,
+    @inject(LeaderboardListService)
+    private readonly leaderboardLists: LeaderboardListService,
+    @inject(TOKENS.adminUserIds)
+    private readonly adminUserIds: Set<string>,
   ) {}
 
   async handle(command: CombaCommand): Promise<Response> {
     const subcommand = parseSubcommand(command.text);
+    if (subcommand.type === "admin-list-sync") {
+      if (!this.adminUserIds.has(command.user_id))
+        return ephemeral(
+          "Only a Ċomba administrator can synchronize the leaderboard List.",
+        );
+      const result = await this.leaderboardLists.sync(
+        command.team_id,
+        command.channel_id,
+      );
+      return ephemeral(
+        `${result.created ? "Created" : "Reused"} Ċomba Leaderboard ${result.listId}; wrote ${result.rows} rows at ${result.syncedAt}. Add/select the List in this channel's tabs if Slack does not show it automatically.`,
+      );
+    }
     if (subcommand.type === "leaderboard") {
       return ephemeral(
         renderLeaderboard(
@@ -165,7 +183,8 @@ type ParsedSubcommand =
   | { playerId?: string; type: "stats" }
   | { type: "start" }
   | { type: "help" }
-  | { type: "leaderboard" };
+  | { type: "leaderboard" }
+  | { type: "admin-list-sync" };
 
 function parseSubcommand(text: string): ParsedSubcommand {
   const normalized = text.trim();
@@ -174,6 +193,8 @@ function parseSubcommand(text: string): ParsedSubcommand {
   }
 
   const [name, ...arguments_] = normalized.split(/\s+/);
+  if (name === "admin" && arguments_.join(" ") === "list sync")
+    return { type: "admin-list-sync" };
   if (name === "leaderboard" && arguments_.length === 0) {
     return { type: "leaderboard" };
   }

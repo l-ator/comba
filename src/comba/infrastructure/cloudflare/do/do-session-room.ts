@@ -5,6 +5,10 @@ import { errorDetails } from "@shared/observability/error-details";
 import { HttpSlackClient } from "@comba/infrastructure/slack/http-slack-client";
 import { renderSession } from "@comba/presentation/slack/views/lobby";
 import { D1GameHistoryRepository } from "@comba/infrastructure/cloudflare/d1/game-history-repository";
+import { D1StatisticsRepository } from "@comba/infrastructure/cloudflare/d1/statistics-repository";
+import { KVLeaderboardListRepository } from "@comba/infrastructure/cloudflare/kv/leaderboard-list-repository";
+import { StatisticsService } from "@comba/application/statistics-service";
+import { LeaderboardListService } from "@comba/application/leaderboard-list-service";
 import { liveSessionToView } from "@comba/application/models/session-view";
 import type {
   CompleteRoomCommand,
@@ -34,12 +38,19 @@ const MAX_EXPECTED_PENDING_ARCHIVES = 25;
 export class DoSessionRoom extends DurableObject<CombaBindings> {
   private readonly history: D1GameHistoryRepository;
   private readonly slack: HttpSlackClient;
+  private readonly leaderboardLists: LeaderboardListService;
 
   constructor(ctx: DurableObjectState, env: CombaBindings) {
     super(ctx, env);
     this.history = new D1GameHistoryRepository(env.DB);
     this.slack = new HttpSlackClient(env.SLACK_BOT_TOKEN, (input, init) =>
       fetch(input, init),
+    );
+    this.leaderboardLists = new LeaderboardListService(
+      new StatisticsService(new D1StatisticsRepository(env.DB)),
+      this.slack,
+      new KVLeaderboardListRepository(env.LEADERBOARD_LIST),
+      () => new Date(),
     );
   }
 
@@ -355,6 +366,14 @@ export class DoSessionRoom extends DurableObject<CombaBindings> {
     if (!game) return;
     try {
       await this.history.archive(game);
+      try {
+        await this.leaderboardLists.sync(game.workspaceId, game.channelId);
+      } catch (error) {
+        console.error("Failed to synchronize Ċomba leaderboard after archive", {
+          error: errorDetails(error),
+          gameId,
+        });
+      }
       const latest = await this.load();
       if (latest.pendingArchives[gameId]?.updatedAt === game.updatedAt) {
         const pendingArchives = { ...latest.pendingArchives };
