@@ -5,6 +5,7 @@ import {
   SlackApiError,
 } from "@comba/infrastructure/slack/http-slack-client";
 import type { SlackMessageView } from "@comba/presentation/slack/views/types";
+import { GameOutcome } from "@comba/domain/statistics/model";
 
 const message: SlackMessageView = { blocks: [], text: "⚽ Ċomba?" };
 
@@ -22,7 +23,7 @@ describe("HttpSlackClient", () => {
       ok: true,
     }));
     const client = new HttpSlackClient("xoxb-secret", fetcher);
-    await expect(client.create("Ċomba Leaderboard")).resolves.toMatchObject({
+    await expect(client.create()).resolves.toMatchObject({
       listId: "F1",
     });
     const body = requestBody(fetcher, 0);
@@ -39,8 +40,8 @@ describe("HttpSlackClient", () => {
     };
     await client.deleteRows("F1", ["R1", "R2"]);
     await client.writeSnapshot(definition, [
-      { gameWinRate: 75, gamesLost: 1, gamesPlayed: 4, gamesWon: 3, playerId: "U1", rank: 1, playerCount: 2, record: "4 - 3 - 1 🥇", teammate: "UT", nemesis: "UN", victim: "", form: "large_green_circle large_green_circle red_circle" },
-      { gameWinRate: 50, gamesLost: 2, gamesPlayed: 4, gamesWon: 2, playerId: "U2", rank: 2, playerCount: 2, record: "4 - 2 - 2 💩", teammate: "", nemesis: "", victim: "UV", form: "red_circle" },
+      { gameWinRate: 75, gamesLost: 1, gamesPlayed: 4, gamesWon: 3, playerId: "U1", rank: 1, recentOutcomes: [GameOutcome.WON, GameOutcome.WON, GameOutcome.LOST], relational: { bestTeammate: "UT", gamesPlayedTogether: 3, nemesis: "UN", nemesisCount: 2, victim: null, victimCount: 0 } },
+      { gameWinRate: 50, gamesLost: 2, gamesPlayed: 4, gamesWon: 2, playerId: "U2", rank: 2, recentOutcomes: [GameOutcome.LOST], relational: { bestTeammate: null, gamesPlayedTogether: 0, nemesis: null, nemesisCount: 0, victim: "UV", victimCount: 2 } },
     ]);
     expect(fetcher).toHaveBeenNthCalledWith(1, "https://slack.com/api/slackLists.items.deleteMultiple", expect.objectContaining({ body: expect.stringContaining('"ids":["R1","R2"]') }));
     const create1 = requestBody(fetcher, 1);

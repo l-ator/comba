@@ -203,7 +203,7 @@ export class D1StatisticsRepository implements StatisticsRepository {
       gameId: row.gameId,
       scores: JSON.parse(row.scores) as Record<string, number>,
       teams: JSON.parse(row.teams) as Team[],
-      won: Number(row.won),
+      won: Boolean(row.won),
     }));
   }
 

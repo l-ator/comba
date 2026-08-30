@@ -1,6 +1,7 @@
 import { inject, Lifecycle, scoped } from "tsyringe";
 
 import { TOKENS } from "@shared/di/tokens";
+import { GameOutcome } from "@comba/domain/statistics/model";
 import type {
   HeadToHeadStatistics,
   Leaderboard,
@@ -127,17 +128,17 @@ export class StatisticsService {
     };
   }
 
-  async getRecentForm(
+  async getRecentOutcomes(
     workspaceId: string,
     playerId: string,
     limit = 5,
-  ): Promise<string[]> {
+  ): Promise<GameOutcome[]> {
     const sessions = await this.repository.getRecentGames(
       workspaceId,
       playerId,
       limit,
     );
-    const outcomes: string[] = [];
+    const outcomes: GameOutcome[] = [];
     for (const session of [...sessions].reverse()) {
       const team = session.teams.find((t) =>
         t.players.some((p) => p.userId === playerId),
@@ -146,8 +147,8 @@ export class StatisticsService {
       const opponentId = team.id === "A" ? "B" : "A";
       const wins = session.scores[team.id] ?? 0;
       const losses = session.scores[opponentId] ?? 0;
-      for (let i = 0; i < wins; i++) outcomes.push("large_green_circle");
-      for (let i = 0; i < losses; i++) outcomes.push("red_circle");
+      for (let i = 0; i < wins; i++) outcomes.push(GameOutcome.WON);
+      for (let i = 0; i < losses; i++) outcomes.push(GameOutcome.LOST);
     }
     return outcomes.slice(-limit).reverse();
   }

@@ -4,7 +4,7 @@ export interface SlackMessageView {
 }
 
 export interface SlackModalView {
-  blocks: SlackInputBlock[];
+  blocks: Array<SlackInputBlock | SlackSectionBlock>;
   callback_id: string;
   close: SlackPlainText;
   private_metadata: string;

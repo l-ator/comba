@@ -1,4 +1,7 @@
-import type { LeaderboardEntry } from "@comba/domain/statistics/model";
+import type {
+  GameOutcome,
+  LeaderboardEntry,
+} from "@comba/domain/statistics/model";
 
 export interface LeaderboardListColumns {
   record: string;
@@ -17,13 +20,8 @@ export interface LeaderboardListDefinition {
 }
 
 export interface LeaderboardListRow extends LeaderboardEntry {
-  form: string;
-  nemesis: string;
+  recentOutcomes: GameOutcome[];
   rank: number;
-  playerCount: number;
-  record: string;
-  teammate: string;
-  victim: string;
 }
 export class LeaderboardListNotFoundError extends Error {
   constructor() {
@@ -33,7 +31,7 @@ export class LeaderboardListNotFoundError extends Error {
 }
 
 export interface LeaderboardListPort {
-  create(name: string): Promise<LeaderboardListDefinition>;
+  create(channelName?: string): Promise<LeaderboardListDefinition>;
   deleteRows(listId: string, rowIds: string[]): Promise<void>;
   grantChannelReadAccess(listId: string, channelId: string): Promise<void>;
   listRowIds(listId: string): Promise<string[]>;

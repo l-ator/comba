@@ -46,7 +46,7 @@ export class LeaderboardListService {
       }
     }
     if (!stored) {
-      const definition = await this.lists.create(listName(channelName));
+      const definition = await this.lists.create(channelName);
       stored = {
         ...definition,
         channelId,
@@ -63,25 +63,14 @@ export class LeaderboardListService {
     const syncedAt = this.now().toISOString();
     const rows: LeaderboardListRow[] = await Promise.all(
       leaderboard.players.map(async (player, index) => {
-        const form = await this.statistics.getRecentForm(
+        const recentOutcomes = await this.statistics.getRecentOutcomes(
           workspaceId,
           player.playerId,
         );
         return {
           ...player,
           rank: index + 1,
-          playerCount: leaderboard.players.length,
-          record: record(
-            player.gamesPlayed,
-            player.gamesWon,
-            player.gamesLost,
-            index + 1,
-            leaderboard.players.length,
-          ),
-          teammate: player.relational?.bestTeammate ?? "",
-          nemesis: player.relational?.nemesis ?? "",
-          victim: player.relational?.victim ?? "",
-          form: form.join(" "),
+          recentOutcomes,
         };
       }),
     );
@@ -97,22 +86,4 @@ export class LeaderboardListService {
       configured.map((item) => this.sync(item.workspaceId, item.channelId)),
     );
   }
-}
-
-function listName(channelName?: string): string {
-  return channelName
-    ? `Ċomba Leaderboard · #${channelName}`
-    : "Ċomba Leaderboard";
-}
-
-function record(
-  played: number,
-  won: number,
-  lost: number,
-  rank: number,
-  playerCount: number,
-): string {
-  const medal = ["🥇", "🥈", "🥉"][rank - 1];
-  const emoji = medal ?? (playerCount > 1 && rank === playerCount ? "💩" : "");
-  return `${played} - ${won} - ${lost}${emoji ? ` ${emoji}` : ""}`;
 }

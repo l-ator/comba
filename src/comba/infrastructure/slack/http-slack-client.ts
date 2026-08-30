@@ -18,6 +18,7 @@ import type {
   LeaderboardListRow,
 } from "@comba/application/ports/leaderboard-list";
 import { LeaderboardListNotFoundError } from "@comba/application/ports/leaderboard-list";
+import { GameOutcome } from "@comba/domain/statistics/model";
 
 const slackMessageResponseSchema = z.object({
   channel: z.string().min(1),
@@ -115,7 +116,7 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
     });
   }
 
-  async create(name: string): Promise<LeaderboardListDefinition> {
+  async create(channelName?: string): Promise<LeaderboardListDefinition> {
     const keys: Array<
       [keyof LeaderboardListColumns, string, string, boolean?]
     > = [
@@ -129,7 +130,7 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
       ["victim", "victim", "Victim"],
     ];
     const payload = await this.request("slackLists.create", {
-      name,
+      name: listName(channelName),
       schema: keys.map(([property, key, name, primary]) => ({
         key,
         name,
@@ -237,7 +238,7 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
       const fields = [
         {
           column_id: definition.columns.record,
-          rich_text: richText(row.record),
+          rich_text: richText(record(row, rows.length)),
         },
         { column_id: definition.columns.player, user: [row.playerId] },
         { column_id: definition.columns.rank, number: [row.rank] },
@@ -245,15 +246,33 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
           column_id: definition.columns.winRate,
           rich_text: richText(`${formatPercent(row.gameWinRate)}%`),
         },
-        { column_id: definition.columns.form, rich_text: formRichText(row.form) },
-        ...(row.teammate
-          ? [{ column_id: definition.columns.teammate, user: [row.teammate] }]
+        {
+          column_id: definition.columns.form,
+          rich_text: formRichText(row.recentOutcomes),
+        },
+        ...(row.relational?.bestTeammate
+          ? [
+              {
+                column_id: definition.columns.teammate,
+                user: [row.relational.bestTeammate],
+              },
+            ]
           : []),
-        ...(row.nemesis
-          ? [{ column_id: definition.columns.nemesis, user: [row.nemesis] }]
+        ...(row.relational?.nemesis
+          ? [
+              {
+                column_id: definition.columns.nemesis,
+                user: [row.relational.nemesis],
+              },
+            ]
           : []),
-        ...(row.victim
-          ? [{ column_id: definition.columns.victim, user: [row.victim] }]
+        ...(row.relational?.victim
+          ? [
+              {
+                column_id: definition.columns.victim,
+                user: [row.relational.victim],
+              },
+            ]
           : []),
       ];
       await this.requestOk("slackLists.items.create", {
@@ -341,8 +360,10 @@ function formatPercent(value: number): string {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
-function formRichText(form: string) {
-  const names = form.split(" ").filter((name) => name.length > 0);
+function formRichText(outcomes: GameOutcome[]) {
+  const names = outcomes.map((outcome) =>
+    outcome === GameOutcome.WON ? "large_green_circle" : "red_circle",
+  );
   const elements: Array<
     | { name: string; type: "emoji" }
     | { text: string; type: "text" }
@@ -361,3 +382,15 @@ function formRichText(form: string) {
   ];
 }
 
+function listName(channelName?: string): string {
+  return channelName
+    ? `Ċomba Leaderboard · #${channelName}`
+    : "Ċomba Leaderboard";
+}
+
+function record(row: LeaderboardListRow, playerCount: number): string {
+  const medal = ["🥇", "🥈", "🥉"][row.rank - 1];
+  const emoji =
+    medal ?? (playerCount > 1 && row.rank === playerCount ? "💩" : "");
+  return `${row.gamesPlayed} - ${row.gamesWon} - ${row.gamesLost}${emoji ? ` ${emoji}` : ""}`;
+}

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { LeaderboardListService } from "@comba/application/leaderboard-list-service";
 import { LeaderboardListNotFoundError } from "@comba/application/ports/leaderboard-list";
+import { GameOutcome } from "@comba/domain/statistics/model";
 
 const columns = {
   form: "form",
@@ -27,8 +28,11 @@ describe("LeaderboardListService", () => {
         expect.objectContaining({
           playerId: "U1",
           rank: 1,
-          record: "4 - 3 - 1 🥇",
-          form: "large_green_circle large_green_circle red_circle",
+          recentOutcomes: [
+            GameOutcome.WON,
+            GameOutcome.WON,
+            GameOutcome.LOST,
+          ],
         }),
       ],
     );
@@ -120,10 +124,10 @@ function setup(
       mostGames: null,
       players,
     })),
-    getRecentForm: vi.fn(async () => [
-      "large_green_circle",
-      "large_green_circle",
-      "red_circle",
+    getRecentOutcomes: vi.fn(async () => [
+      GameOutcome.WON,
+      GameOutcome.WON,
+      GameOutcome.LOST,
     ]),
   };
   const lists = {

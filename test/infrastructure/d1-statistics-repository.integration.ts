@@ -148,6 +148,12 @@ describe("D1StatisticsRepository relational leaderboard", () => {
       "R3",
       "R2",
     ]);
-    expect(recent.map((game) => game.won)).toEqual([0, 1, 0, 1, 0]);
+    expect(recent.map((game) => game.won)).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+    ]);
   });
 });

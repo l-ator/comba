@@ -5,6 +5,11 @@ export interface PlayerStatistics {
   gameWinRate: number;
 }
 
+export enum GameOutcome {
+  LOST = "LOST",
+  WON = "WON",
+}
+
 export interface PlayerStats extends PlayerStatistics {
   relational?: RelationalStats;
 }

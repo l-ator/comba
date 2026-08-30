@@ -36,7 +36,7 @@ export interface HeadToHeadNeedleRecord {
 export interface GameOutcomeRecord {
   gameId: string;
   teams: Team[];
-  won: number;
+  won: boolean;
   scores: Record<string, number>;
   completedAt: string;
 }
