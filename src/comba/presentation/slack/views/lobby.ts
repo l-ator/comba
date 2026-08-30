@@ -267,7 +267,7 @@ function randomLobbyTaunt(): string {
 
 function closesInLabel(expiresAt: string): string {
   const unix = Math.floor(new Date(expiresAt).getTime() / 1_000);
-  return `closes <!date^${unix}^{ago}|in a few minutes>`;
+  return `closes <!date^${unix}^{time}|later today>`;
 }
 
 function mentions(participants: SessionParticipant[], team: Team): string {
