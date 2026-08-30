@@ -1,8 +1,8 @@
-# Personal Slack and Cloudflare setup
+# Slack and Cloudflare setup
 
-The application can be developed and tested locally without either account. Real Slack round trips require a stable HTTPS endpoint, so perform this setup when ready to deploy the development Worker.
+The application can be developed and tested locally without either account. Real Slack round trips require a stable HTTPS endpoint, so perform this setup when ready to deploy a Worker.
 
-## 1. Cloudflare account
+## Cloudflare infrastructure
 
 Authenticate Wrangler:
 
@@ -10,13 +10,24 @@ Authenticate Wrangler:
 npx wrangler login
 ```
 
-Create the development D1 database:
+Each deployed environment uses three Cloudflare resources:
+
+- **D1 (`DB`)** stores archived sessions and statistics data.
+- **KV (`LEADERBOARD_LIST`)** stores the Slack leaderboard List ID used for reconciliation.
+- **Durable Objects (`SESSION_ROOMS`)** own live session state, expiry alarms, and pending archives. Wrangler creates the `SessionRoom` class storage when the Worker is first deployed with its migration.
+
+Development and production use separate D1 databases, KV namespaces, Worker deployments, Durable Object storage, variables, and secrets.
+
+### Development resources
+
+Create the D1 database and KV namespace:
 
 ```bash
 npx wrangler d1 create comba-dev
+npx wrangler kv namespace create LEADERBOARD_LIST_DEV
 ```
 
-Copy the returned database ID into the `database_id` placeholder in `wrangler.jsonc`, then apply migrations remotely:
+Copy the returned IDs into the `env.dev` D1 and KV entries in `wrangler.jsonc`, then apply the D1 migration:
 
 ```bash
 npm run db:migrate:dev
@@ -25,17 +36,31 @@ npm run db:migrate:dev
 Set the dedicated personal Slack channel ID in `COMBA_CHANNEL_ID`. Slack channel IDs are stable values such as `C012ABCDEF`, not channel names.
 Set `COMBA_ADMIN_USER_IDS` to the comma-separated Slack user IDs allowed to run hidden maintenance commands.
 
-## 2. Initial Worker deployment
-
-Deploy once to obtain the public Worker URL:
+Deploy once to provision the development Worker and its `SessionRoom` Durable Object migration:
 
 ```bash
 npm run deploy:dev
 ```
 
-Replace both `REPLACE_WITH_WORKER_URL` placeholders in `../resources/slack/manifest-dev.yaml` with that hostname.
+### Production resources
 
-## 3. Personal Slack app
+The production D1 database and KV namespace are already provisioned and referenced by `env.prod` in `wrangler.jsonc`. Apply the D1 migration before the first production deployment:
+
+```bash
+npm run db:migrate:prod
+```
+
+Set the production `COMBA_CHANNEL_ID` and `COMBA_ADMIN_USER_IDS` values before deploying. The first deployment provisions the production Worker and its separate `SessionRoom` Durable Object storage:
+
+```bash
+npm run deploy:prod
+```
+
+Production Slack credentials and the production Slack manifest are intentionally deferred until the production Slack app is ready.
+
+## Development Slack app
+
+After the initial development deployment, replace both `REPLACE_WITH_WORKER_URL` placeholders in `../resources/slack/manifest-dev.yaml` with the development Worker hostname.
 
 At Slack's app management page, create an app from `../resources/slack/manifest-dev.yaml` in the personal test workspace.
 
@@ -59,13 +84,13 @@ Install the app into the personal workspace and invite Ċombot to the dedicated 
 /invite @Ċombot
 ```
 
-## 4. Worker secrets
+## Development Worker secrets
 
 Copy the app's Signing Secret and Bot User OAuth Token from Slack, then store them as encrypted Worker secrets:
 
 ```bash
-npx wrangler secret put SLACK_SIGNING_SECRET
-npx wrangler secret put SLACK_BOT_TOKEN
+npx wrangler secret put SLACK_SIGNING_SECRET --env dev
+npx wrangler secret put SLACK_BOT_TOKEN --env dev
 ```
 
 Never put either value in `wrangler.jsonc`, `.dev.vars.example`, GitHub, logs, or documentation.
@@ -76,21 +101,7 @@ Deploy again after configuration changes:
 npm run deploy:dev
 ```
 
-## Prod environment
-
-Prod has separate D1, Slack channel, Worker secrets, and Slack app placeholders under `env.prod` in `wrangler.jsonc`. Create the prod database and replace its ID and channel ID before running:
-
-```bash
-npm run db:migrate:prod
-npm run deploy:prod
-npx wrangler secret put SLACK_SIGNING_SECRET --env prod
-npx wrangler secret put SLACK_BOT_TOKEN --env prod
-npm run deploy:prod
-```
-
-Create the prod Slack app from `../resources/slack/manifest.prod.yaml` after replacing `REPLACE_WITH_PROD_WORKER_URL`. Development and prod credentials are intentionally independent.
-
-## 5. Smoke test
+## Smoke test
 
 In the configured Slack channel:
 
@@ -104,8 +115,8 @@ Expected behavior:
 2. The creator appears in Team A.
 3. Other workspace users can join or leave from buttons.
 4. A fourth player changes the same message to READY.
-5. A participant can record and correct the aggregate result.
-6. `/comba stats` reflects the latest corrected score.
+5. A participant can record and correct how many games each team won.
+6. `/comba stats` reflects the latest corrected games.
 7. `/comba admin list sync` creates the sortable leaderboard List for an allowlisted administrator.
 
 ## Local-only development
