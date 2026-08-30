@@ -27,6 +27,8 @@ This stack is intended to remain within free allowances for a small internal off
 - `/comba stats [@user]` shows individual statistics.
 - `/comba h2h @user` shows opponent and teammate performance.
 - `/comba leaderboard` ranks every player by games won and shows fun aggregate stats.
+- `/comba admin list sync` creates or refreshes a native sortable Slack leaderboard List for configured administrators.
+- An hourly Cron Trigger reconciles configured leaderboard Lists.
 
 ## Local development
 
@@ -57,6 +59,7 @@ Before deployment, replace these values:
 
 - `database_id` in `wrangler.jsonc`, after creating the development D1 database.
 - `COMBA_CHANNEL_ID` in `wrangler.jsonc` with the personal Slack test channel ID.
+- `COMBA_ADMIN_USER_IDS` in `wrangler.jsonc` with comma-separated Slack administrator user IDs.
 - `REPLACE_WITH_WORKER_URL` in `resources/slack/manifest.yaml` with the deployed Worker hostname.
 - `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN` through Wrangler secrets.
 
@@ -64,4 +67,4 @@ See [`docs/slack-setup.md`](./docs/slack-setup.md) for the complete sequence.
 
 ## Current status
 
-The core lobby, timeout, result correction, player statistics, head-to-head, and teammate-statistics paths are implemented. History, leaderboards, and App Home remain future slices.
+The core lobby, timeout, result correction, statistics, leaderboard command, and native leaderboard List projection are implemented. History and App Home remain future slices.

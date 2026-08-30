@@ -19,6 +19,8 @@ oauth_config:
     bot:
       - commands
       - chat:write
+      - lists:read
+      - lists:write
 
 settings:
   interactivity:

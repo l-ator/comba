@@ -23,6 +23,7 @@ npm run db:migrate:dev
 ```
 
 Set the dedicated personal Slack channel ID in `COMBA_CHANNEL_ID`. Slack channel IDs are stable values such as `C012ABCDEF`, not channel names.
+Set `COMBA_ADMIN_USER_IDS` to the comma-separated Slack user IDs allowed to run hidden maintenance commands.
 
 ## 2. Initial Worker deployment
 
@@ -44,9 +45,13 @@ The manifest configures:
 - Bot display name: **Ċombot 🤖**
 - Slash command: `/comba`
 - Interactivity request URL
-- Bot scopes: `commands`, `chat:write`
+- Bot scopes: `commands`, `chat:write`, `lists:read`, `lists:write`
 
 No event subscriptions, channel-history access, private-message access, email access, user token, or admin scope is required.
+
+Reinstall or reauthorize the app after adding the Lists scopes. Slack currently documents Lists API access as a paid-workspace feature even when the Lists UI is visible; Ċomba preserves actionable errors such as `lists_disabled_user_team` so availability can be verified in the target workspace.
+
+An allowlisted administrator can create or refresh the native leaderboard List with `/comba admin list sync`. If Slack does not expose the shared List as a channel tab automatically, add or select it manually from the channel header.
 
 Install the app into the personal workspace and invite Ċombot to the dedicated channel:
 
@@ -101,6 +106,7 @@ Expected behavior:
 4. A fourth player changes the same message to READY.
 5. A participant can record and correct the aggregate result.
 6. `/comba stats` reflects the latest corrected score.
+7. `/comba admin list sync` creates the sortable leaderboard List for an allowlisted administrator.
 
 ## Local-only development
 

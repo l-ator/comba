@@ -4,11 +4,13 @@
 
 Slack sends signed commands, block actions, and modal submissions to a Hono application in a Cloudflare Worker. Every invocation creates and disposes a TSyringe child container containing that invocation's `Env`, bindings, clients, repositories, services, and handlers. Only the Worker/composition boundary resolves from the container; application code uses constructor injection.
 
-One `DurableOjbectSessionRoom` Durable Object, named by `workspaceId:channelId`, is authoritative for the channel's live lobby. It serializes joins, switches, bench actions, result submission, and expiry. Its alarm expires live state and retries its archive outbox.
+One `DoSessionRoom` Durable Object, named by `workspaceId:channelId`, is authoritative for the channel's live lobby. It serializes joins, switches, bench actions, result submission, and expiry. Its alarm expires live state and retries its archive outbox.
 
 D1 contains completed games and participants only. Statistics, head-to-head comparisons, leaderboards, and historical result edits query these immutable-history-oriented tables. Initial result submission snapshots the live session into the DO outbox and immediately frees the channel; historical edits use D1 after archival. An edit that arrives while archival is pending updates the outbox snapshot instead.
 
 Slack messages are projections. Every accepted join or bench action updates the original lobby message. Expired lobby projections are retained in a Durable Object outbox and retried by its alarm after transient Slack failures. Result amendments are announced in that message's thread and mention every participant.
+
+The native Slack leaderboard List is another projection of the existing application leaderboard query. Result flows attempt an immediate full snapshot replacement, while an hourly Cron Trigger reconciles every configured List after transient failures.
 
 ## Source boundaries
 
@@ -19,12 +21,11 @@ src/
     domain/                        Session, result, and statistics rules/models
     application/                   Use cases, ports, and presentation models
     infrastructure/
-      cloudflare/                  Durable Object and invocation-bound adapter
-      d1/                          Historical persistence adapters
-      slack/                       Slack Web API adapter
+      cloudflare/                  Cloudflare bindings with D1 and DO adapters
+      slack/                       Slack Web API adapters
     presentation/slack/            Commands, interactions, schemas, and views
   shared/                          Cross-cutting DI and observability utilities
-migrations/                        D1 history schema and legacy backfill
+resources/migrations/              D1 schema migrations
 test/                              Unit and Cloudflare integration tests
 ```
 
