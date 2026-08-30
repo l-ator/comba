@@ -135,9 +135,8 @@ export class CombaInteractionHandler {
     try {
       mutation = await this.resultService.record({
         channelId: metadata.channelId,
+        gameScores: parsed.gameScores,
         sessionId: metadata.sessionId,
-        teamAWins: parsed.teamAWins,
-        teamBWins: parsed.teamBWins,
         userId: interaction.user.id,
         workspaceId: interaction.team.id,
       });
@@ -264,7 +263,7 @@ function parseSubmittedScores(
   values: Record<string, Record<string, unknown>>,
 ):
   | { errors: Record<string, string>; success: false }
-  | { success: true; teamAWins: number; teamBWins: number } {
+  | { gameScores: Array<"A" | "B">; success: true } {
   const errors: Record<string, string> = {};
   const teamA = scoreFrom(values, RESULT_MODAL.teamABlockId);
   const teamB = scoreFrom(values, RESULT_MODAL.teamBBlockId);
@@ -292,7 +291,13 @@ function parseSubmittedScores(
 
   return Object.keys(errors).length > 0 || teamA === null || teamB === null
     ? { errors, success: false }
-    : { success: true, teamAWins: teamA, teamBWins: teamB };
+    : {
+        gameScores: [
+          ...Array<"A">(teamA).fill("A"),
+          ...Array<"B">(teamB).fill("B"),
+        ],
+        success: true,
+      };
 }
 
 function scoreFrom(

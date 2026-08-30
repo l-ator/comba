@@ -54,3 +54,5 @@ Before deployment, replace these values:
 - `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN` through Wrangler secrets.
 
 See [`docs/slack-setup.md`](./docs/slack-setup.md) for the complete sequence.
+
+CI and deployment behavior is documented in [`docs/deployment.md`](./docs/deployment.md).

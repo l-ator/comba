@@ -70,44 +70,44 @@ export function liveSessionToView(
   };
 }
 
-export function completedGameToView(
-  game: CompletedGame,
+export function completedSessionToView(
+  completed: CompletedSession,
 ): SessionWithParticipants {
-  const participants = game.teams.flatMap((team) =>
+  const participants = completed.teams.flatMap((team) =>
     team.players.map((player) => ({
       joinedAt: player.joinedAt,
       position: player.position as TeamPosition,
-      sessionId: game.id,
+      sessionId: completed.id,
       team: team.id as Team,
       userId: player.userId,
-      workspaceId: game.workspaceId,
+      workspaceId: completed.workspaceId,
     })),
   );
   return {
     participants,
     result: {
-      createdAt: game.completedAt,
-      sessionId: game.id,
-      submittedBy: game.submittedBy,
-      teamAWins: game.scores.A ?? 0,
-      teamBWins: game.scores.B ?? 0,
-      updatedAt: game.updatedAt,
-      updatedBy: game.updatedBy,
+      createdAt: completed.completedAt,
+      sessionId: completed.id,
+      submittedBy: completed.submittedBy,
+      teamAWins: completed.gameScores.filter((winner) => winner === "A").length,
+      teamBWins: completed.gameScores.filter((winner) => winner === "B").length,
+      updatedAt: completed.updatedAt,
+      updatedBy: completed.updatedBy,
     },
     session: {
-      channelId: game.channelId,
-      completedAt: game.completedAt,
-      createdAt: game.createdAt,
-      creatorUserId: participants[0]?.userId ?? game.submittedBy,
-      expiresAt: game.readyAt ?? game.completedAt,
-      id: game.id,
-      messageTs: game.messageTs ?? null,
-      readyAt: game.readyAt ?? null,
+      channelId: completed.channelId,
+      completedAt: completed.completedAt,
+      createdAt: completed.createdAt,
+      creatorUserId: participants[0]?.userId ?? completed.submittedBy,
+      expiresAt: completed.readyAt ?? completed.completedAt,
+      id: completed.id,
+      messageTs: completed.messageTs ?? null,
+      readyAt: completed.readyAt ?? null,
       revision: 0,
       status: "COMPLETED",
-      workspaceId: game.workspaceId,
+      workspaceId: completed.workspaceId,
     },
   };
 }
 import type { SessionResult } from "@comba/domain/result/model";
-import type { CompletedGame, LiveSession } from "@comba/domain/session/model";
+import type { CompletedSession, LiveSession } from "@comba/domain/session/model";

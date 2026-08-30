@@ -19,7 +19,7 @@
         {
           "binding": "DB",
           "database_name": "comba-dev",
-          "database_id": "d64266ac-d99a-4014-8a0a-ce41aff0e0de",
+          "database_id": "12887813-a645-4dc8-9321-5a1bf24bfc97",
           "migrations_dir": "resources/migrations"
         }
       ],
@@ -45,14 +45,14 @@
         {
           "binding": "DB",
           "database_name": "comba-prod",
-          "database_id": "REPLACE_WITH_PROD_D1_DATABASE_ID",
+          "database_id": "c8d22059-7f98-4f3f-a928-4ef1ffed03a6",
           "migrations_dir": "resources/migrations"
         }
       ],
       "kv_namespaces": [
         {
           "binding": "LEADERBOARD_LIST",
-          "id": "REPLACE_WITH_DEV_LEADERBOARD_LIST_ID"
+          "id": "610285074a0d48f0837f1cb96c0ac299"
         }
       ],
       "vars": {

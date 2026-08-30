@@ -1,9 +1,10 @@
 import type { SessionRoomResult } from "@comba/domain/session/room-result";
 import type {
   BenchOutcome,
-  CompletedGame,
-  CompletedGameMutation,
+  CompletedSession,
+  CompletedSessionMutation,
   LiveSession,
+  TeamId,
 } from "@comba/domain/session/model";
 
 export interface StartRoomCommand {
@@ -24,7 +25,7 @@ export interface JoinRoomCommand {
 
 export interface CompleteRoomCommand {
   now: string;
-  scores: Record<string, number>;
+  gameScores: TeamId[];
   sessionId: string;
   userId: string;
 }
@@ -38,11 +39,11 @@ export interface SessionRoomPort {
   amendPending(
     workspaceId: string,
     channelId: string,
-    gameId: string,
+    sessionId: string,
     userId: string,
-    scores: Record<string, number>,
+    gameScores: TeamId[],
     now: string,
-  ): Promise<SessionRoomResult<CompletedGameMutation>>;
+  ): Promise<SessionRoomResult<CompletedSessionMutation>>;
   attachMessage(
     workspaceId: string,
     channelId: string,
@@ -63,7 +64,7 @@ export interface SessionRoomPort {
     workspaceId: string,
     channelId: string,
     command: CompleteRoomCommand,
-  ): Promise<SessionRoomResult<CompletedGame>>;
+  ): Promise<SessionRoomResult<CompletedSession>>;
   join(
     workspaceId: string,
     channelId: string,

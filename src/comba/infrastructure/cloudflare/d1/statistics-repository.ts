@@ -1,7 +1,6 @@
 import { inject, Lifecycle, scoped } from "tsyringe";
 
 import { TOKENS } from "@shared/di/tokens";
-import type { Team } from "@comba/domain/session/model";
 import type {
   BestTeammateRecord,
   GameOutcomeRecord,
@@ -32,12 +31,30 @@ interface NeedleRow {
 }
 
 interface RecentGameRow {
-  gameId: string;
   completedAt: string;
-  scores: string;
+  gameIndex: number;
+  sessionId: string;
   won: number;
-  teams: string;
 }
+
+const ATOMIC_GAMES_CTE = `WITH session_participants AS (
+  SELECT s.id AS sessionId,
+         s.workspace_id AS workspaceId,
+         s.completed_at AS completedAt,
+         s.game_scores AS gameScores,
+         json_extract(team.value, '$.id') AS teamId,
+         json_extract(player.value, '$.userId') AS userId
+  FROM sessions s
+  JOIN json_each(s.teams_json) team
+  JOIN json_each(team.value, '$.players') player
+),
+atomic_games AS (
+  SELECT participant.*,
+         CAST(score.key AS INTEGER) AS gameIndex,
+         CAST(score.value AS TEXT) AS winnerTeamId
+  FROM session_participants participant
+  JOIN json_each(participant.gameScores) score
+)`;
 
 @scoped(Lifecycle.ContainerScoped)
 export class D1StatisticsRepository implements StatisticsRepository {
@@ -46,17 +63,14 @@ export class D1StatisticsRepository implements StatisticsRepository {
   async getLeaderboard(workspaceId: string): Promise<LeaderboardRecord[]> {
     const result = await this.database
       .prepare(
-        `SELECT
-         p.user_id AS playerId,
-         SUM(json_extract(g.scores_json, '$.A') + json_extract(g.scores_json, '$.B')) AS gamesPlayed,
-         SUM(CASE p.team_id WHEN 'A'
-           THEN json_extract(g.scores_json, '$.A') ELSE json_extract(g.scores_json, '$.B') END) AS gamesWon,
-         SUM(CASE p.team_id WHEN 'A'
-           THEN json_extract(g.scores_json, '$.B') ELSE json_extract(g.scores_json, '$.A') END) AS gamesLost
-       FROM game_participants p
-       JOIN games g ON g.id = p.game_id
-       WHERE p.workspace_id = ?
-       GROUP BY p.user_id`,
+        `${ATOMIC_GAMES_CTE}
+         SELECT userId AS playerId,
+                COUNT(*) AS gamesPlayed,
+                SUM(winnerTeamId = teamId) AS gamesWon,
+                SUM(winnerTeamId <> teamId) AS gamesLost
+         FROM atomic_games
+         WHERE workspaceId = ?
+         GROUP BY userId`,
       )
       .bind(workspaceId)
       .all<LeaderboardRecord>();
@@ -74,16 +88,12 @@ export class D1StatisticsRepository implements StatisticsRepository {
   ): Promise<PlayerStatisticsRecord> {
     const row = await this.database
       .prepare(
-        `SELECT
-           COALESCE(SUM(json_extract(g.scores_json, '$.A') + json_extract(g.scores_json, '$.B')), 0) AS gamesPlayed,
-           COALESCE(SUM(CASE p.team_id
-             WHEN 'A' THEN json_extract(g.scores_json, '$.A') ELSE json_extract(g.scores_json, '$.B') END), 0) AS gamesWon,
-           COALESCE(SUM(CASE p.team_id
-             WHEN 'A' THEN json_extract(g.scores_json, '$.B') ELSE json_extract(g.scores_json, '$.A') END), 0) AS gamesLost
-         FROM game_participants p
-         JOIN games g ON g.id = p.game_id
-         WHERE p.workspace_id = ? AND p.user_id = ?
-        `,
+        `${ATOMIC_GAMES_CTE}
+         SELECT COUNT(*) AS gamesPlayed,
+                COALESCE(SUM(winnerTeamId = teamId), 0) AS gamesWon,
+                COALESCE(SUM(winnerTeamId <> teamId), 0) AS gamesLost
+         FROM atomic_games
+         WHERE workspaceId = ? AND userId = ?`,
       )
       .bind(workspaceId, playerId)
       .first<NumericRow>();
@@ -102,17 +112,16 @@ export class D1StatisticsRepository implements StatisticsRepository {
   ): Promise<HeadToHeadRecord> {
     const row = await this.database
       .prepare(
-        `SELECT
-           COALESCE(SUM(json_extract(g.scores_json, '$.A') + json_extract(g.scores_json, '$.B')), 0) AS gamesAgainst,
-           COALESCE(SUM(CASE a.team_id
-             WHEN 'A' THEN json_extract(g.scores_json, '$.A') ELSE json_extract(g.scores_json, '$.B') END), 0) AS playerAWins,
-           COALESCE(SUM(CASE a.team_id
-             WHEN 'A' THEN json_extract(g.scores_json, '$.B') ELSE json_extract(g.scores_json, '$.A') END), 0) AS playerBWins
-         FROM game_participants a
-         JOIN game_participants b
-           ON b.game_id = a.game_id AND b.user_id = ? AND b.team_id <> a.team_id
-         JOIN games g ON g.id = a.game_id
-         WHERE a.workspace_id = ? AND a.user_id = ?`,
+        `${ATOMIC_GAMES_CTE}
+         SELECT COUNT(*) AS gamesAgainst,
+                COALESCE(SUM(game.winnerTeamId = game.teamId), 0) AS playerAWins,
+                COALESCE(SUM(game.winnerTeamId <> game.teamId), 0) AS playerBWins
+         FROM atomic_games game
+         JOIN session_participants opponent
+           ON opponent.sessionId = game.sessionId
+          AND opponent.userId = ?
+          AND opponent.teamId <> game.teamId
+         WHERE game.workspaceId = ? AND game.userId = ?`,
       )
       .bind(playerBId, workspaceId, playerAId)
       .first<NumericRow>();
@@ -131,17 +140,16 @@ export class D1StatisticsRepository implements StatisticsRepository {
   ): Promise<TeammateRecord> {
     const row = await this.database
       .prepare(
-        `SELECT
-           COALESCE(SUM(json_extract(g.scores_json, '$.A') + json_extract(g.scores_json, '$.B')), 0) AS gamesPlayedTogether,
-           COALESCE(SUM(CASE a.team_id
-             WHEN 'A' THEN json_extract(g.scores_json, '$.A') ELSE json_extract(g.scores_json, '$.B') END), 0) AS gamesWonTogether,
-           COALESCE(SUM(CASE a.team_id
-             WHEN 'A' THEN json_extract(g.scores_json, '$.B') ELSE json_extract(g.scores_json, '$.A') END), 0) AS gamesLostTogether
-         FROM game_participants a
-         JOIN game_participants b
-           ON b.game_id = a.game_id AND b.user_id = ? AND b.team_id = a.team_id
-         JOIN games g ON g.id = a.game_id
-         WHERE a.workspace_id = ? AND a.user_id = ?`,
+        `${ATOMIC_GAMES_CTE}
+         SELECT COUNT(*) AS gamesPlayedTogether,
+                COALESCE(SUM(game.winnerTeamId = game.teamId), 0) AS gamesWonTogether,
+                COALESCE(SUM(game.winnerTeamId <> game.teamId), 0) AS gamesLostTogether
+         FROM atomic_games game
+         JOIN session_participants teammate
+           ON teammate.sessionId = game.sessionId
+          AND teammate.userId = ?
+          AND teammate.teamId = game.teamId
+         WHERE game.workspaceId = ? AND game.userId = ?`,
       )
       .bind(playerBId, workspaceId, playerAId)
       .first<NumericRow>();
@@ -182,17 +190,14 @@ export class D1StatisticsRepository implements StatisticsRepository {
   ): Promise<GameOutcomeRecord[]> {
     const result = await this.database
       .prepare(
-        `SELECT g.id AS gameId,
-                g.completed_at AS completedAt,
-                g.scores_json AS scores,
-                g.teams_json AS teams,
-                CASE WHEN (p.team_id = 'A' AND json_extract(g.scores_json, '$.A') > json_extract(g.scores_json, '$.B'))
-                      OR (p.team_id = 'B' AND json_extract(g.scores_json, '$.B') > json_extract(g.scores_json, '$.A'))
-                     THEN 1 ELSE 0 END AS won
-         FROM game_participants p
-         JOIN games g ON g.id = p.game_id
-         WHERE p.workspace_id = ? AND p.user_id = ?
-         ORDER BY g.completed_at DESC
+        `${ATOMIC_GAMES_CTE}
+         SELECT sessionId,
+                gameIndex,
+                completedAt,
+                winnerTeamId = teamId AS won
+         FROM atomic_games
+         WHERE workspaceId = ? AND userId = ?
+         ORDER BY completedAt DESC, gameIndex DESC
          LIMIT ?`,
       )
       .bind(workspaceId, playerId, limit)
@@ -200,9 +205,8 @@ export class D1StatisticsRepository implements StatisticsRepository {
 
     return result.results.map((row) => ({
       completedAt: row.completedAt,
-      gameId: row.gameId,
-      scores: JSON.parse(row.scores) as Record<string, number>,
-      teams: JSON.parse(row.teams) as Team[],
+      gameIndex: Number(row.gameIndex),
+      sessionId: row.sessionId,
       won: Boolean(row.won),
     }));
   }
@@ -212,27 +216,19 @@ export class D1StatisticsRepository implements StatisticsRepository {
   ): Promise<Array<{ bestTeammate: BestTeammateRecord; playerId: string }>> {
     const result = await this.database
       .prepare(
-        `WITH teammate_games AS (
-           SELECT me.user_id AS playerId,
-                  partner.user_id AS partnerId,
-                  me.team_id AS teamId,
-                  g.scores_json AS scores
-           FROM game_participants me
-           JOIN game_participants partner
-             ON partner.game_id = me.game_id
-            AND partner.user_id <> me.user_id
-            AND partner.team_id = me.team_id
-           JOIN games g ON g.id = me.game_id
-           WHERE me.workspace_id = ?
-         ),
+        `${ATOMIC_GAMES_CTE},
          teammate_agg AS (
-           SELECT playerId, partnerId,
+           SELECT game.userId AS playerId,
+                  teammate.userId AS partnerId,
                   COUNT(*) AS games,
-                  SUM(CASE WHEN (teamId = 'A' AND json_extract(scores,'$.A') > json_extract(scores,'$.B'))
-                            OR (teamId = 'B' AND json_extract(scores,'$.B') > json_extract(scores,'$.A'))
-                           THEN 1 ELSE 0 END) AS wins
-           FROM teammate_games
-           GROUP BY playerId, partnerId
+                  SUM(game.winnerTeamId = game.teamId) AS wins
+           FROM atomic_games game
+           JOIN session_participants teammate
+             ON teammate.sessionId = game.sessionId
+            AND teammate.userId <> game.userId
+            AND teammate.teamId = game.teamId
+           WHERE game.workspaceId = ?
+           GROUP BY game.userId, teammate.userId
            HAVING games >= 3
          ),
          best AS (
@@ -262,33 +258,24 @@ export class D1StatisticsRepository implements StatisticsRepository {
     workspaceId: string,
     mode: "wins" | "losses",
   ): Promise<Array<{ needle: HeadToHeadNeedleRecord; playerId: string }>> {
-    const pick =
+    const outcome =
       mode === "wins"
-        ? `CASE WHEN (teamId = 'A' AND json_extract(scores,'$.A') > json_extract(scores,'$.B'))
-                 OR (teamId = 'B' AND json_extract(scores,'$.B') > json_extract(scores,'$.A'))
-                THEN 1 ELSE 0 END`
-        : `CASE WHEN (teamId = 'A' AND json_extract(scores,'$.A') < json_extract(scores,'$.B'))
-                 OR (teamId = 'B' AND json_extract(scores,'$.B') < json_extract(scores,'$.A'))
-                THEN 1 ELSE 0 END`;
+        ? "game.winnerTeamId = game.teamId"
+        : "game.winnerTeamId <> game.teamId";
     const result = await this.database
       .prepare(
-        `WITH opponent_games AS (
-           SELECT me.user_id AS playerId,
-                  opponent.user_id AS opponentId,
-                  me.team_id AS teamId,
-                  g.scores_json AS scores
-           FROM game_participants me
-           JOIN game_participants opponent
-             ON opponent.game_id = me.game_id
-            AND opponent.user_id <> me.user_id
-            AND opponent.team_id <> me.team_id
-           JOIN games g ON g.id = me.game_id
-           WHERE me.workspace_id = ?
-         ),
+        `${ATOMIC_GAMES_CTE},
          needle_agg AS (
-           SELECT playerId, opponentId, SUM(${pick}) AS payload
-           FROM opponent_games
-           GROUP BY playerId, opponentId
+           SELECT game.userId AS playerId,
+                  opponent.userId AS opponentId,
+                  SUM(${outcome}) AS payload
+           FROM atomic_games game
+           JOIN session_participants opponent
+             ON opponent.sessionId = game.sessionId
+            AND opponent.userId <> game.userId
+            AND opponent.teamId <> game.teamId
+           WHERE game.workspaceId = ?
+           GROUP BY game.userId, opponent.userId
          ),
          ranked AS (
            SELECT playerId, opponentId, payload,
