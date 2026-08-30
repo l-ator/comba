@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "esModuleInterop": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "forceConsistentCasingInFileNames": true,
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@comba/*": ["./src/comba/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@worker/*": ["./src/worker/*"]
+    },
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2023",
+    "types": [
+      "node",
+      "vitest/globals",
+      "@cloudflare/vitest-plugin/types",
+      "./worker-configuration.d.ts"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "vitest.config.ts",
+    "vitest.integration.config.ts",
+    "worker-configuration.d.ts"
+  ]
+}

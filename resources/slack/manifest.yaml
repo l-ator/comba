@@ -1,0 +1,29 @@
+display_information:
+  name: "Ċomba"
+  description: "Organize office table-football sessions and keep score."
+  background_color: "#1264A3"
+
+features:
+  bot_user:
+    display_name: "Combot"
+    always_online: false
+  slash_commands:
+    - command: /comba
+      url: https://comba-dev.comba.workers.dev/slack/commands
+      description: Start a Ċomba session or view stats
+      usage_hint: "[stats | h2h | leaderboard | history]"
+      should_escape: true
+
+oauth_config:
+  scopes:
+    bot:
+      - commands
+      - chat:write
+
+settings:
+  interactivity:
+    is_enabled: true
+    request_url: https://comba-dev.comba.workers.dev/slack/interactions
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

@@ -1,0 +1,33 @@
+{
+  "name": "comba",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "npm run typecheck && npm test && npm run test:integration",
+    "cf-typegen": "wrangler types",
+    "deploy:dev": "wrangler deploy --env dev",
+    "deploy:prod": "wrangler deploy --env prod",
+    "dev": "wrangler dev --env dev",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local --env dev",
+    "db:migrate:dev": "wrangler d1 migrations apply DB --remote --env dev",
+    "db:migrate:prod": "wrangler d1 migrations apply DB --remote --env prod",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "latest",
+    "@types/node": "latest",
+    "typescript": "latest",
+    "vitest": "latest",
+    "wrangler": "latest"
+  },
+  "dependencies": {
+    "hono": "latest",
+    "reflect-metadata": "^0.2.2",
+    "tsyringe": "^4.10.0",
+    "zod": "latest"
+  }
+}
