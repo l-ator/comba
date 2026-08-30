@@ -1,23 +1,26 @@
 import { inject, Lifecycle, scoped } from "tsyringe";
 
 import { TOKENS } from "@shared/di/tokens";
-import type { CompletedGame } from "@comba/domain/session/model";
-import type { CompletedGameMutation } from "@comba/domain/session/model";
+import type {
+  CompletedSession,
+  CompletedSessionMutation,
+  TeamId,
+} from "@comba/domain/session/model";
 import type { GameHistoryPort } from "@comba/application/ports/game-history";
 import {
   ResultPermissionError,
   ResultSessionNotEligibleError,
 } from "@comba/domain/result/errors";
 
-interface GameRow {
+interface SessionRow {
   channel_id: string;
   completed_at: string;
   created_at: string;
   format_json: string;
+  game_scores: string;
   id: string;
   message_ts: string | null;
   ready_at: string | null;
-  scores_json: string;
   submitted_by: string;
   teams_json: string;
   updated_at: string;
@@ -29,129 +32,117 @@ interface GameRow {
 export class D1GameHistoryRepository implements GameHistoryPort {
   constructor(@inject(TOKENS.database) private readonly database: D1Database) {}
 
-  async archive(game: CompletedGame): Promise<void> {
-    const statements = [
-      this.database
-        .prepare(
-          `INSERT INTO games (
-             id, workspace_id, channel_id, message_ts, format_json, teams_json, scores_json,
-             created_at, ready_at, completed_at, submitted_by, updated_at, updated_by
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             scores_json = excluded.scores_json,
-             updated_at = excluded.updated_at,
-             updated_by = excluded.updated_by
-           WHERE excluded.updated_at >= games.updated_at`,
-        )
-        .bind(
-          game.id,
-          game.workspaceId,
-          game.channelId,
-          game.messageTs ?? null,
-          JSON.stringify(game.format),
-          JSON.stringify(game.teams),
-          JSON.stringify(game.scores),
-          game.createdAt,
-          game.readyAt ?? null,
-          game.completedAt,
-          game.submittedBy,
-          game.updatedAt,
-          game.updatedBy,
-        ),
-      ...game.teams.flatMap((team) =>
-        team.players.map((player) =>
-          this.database
-            .prepare(
-              `INSERT INTO game_participants (
-                 game_id, workspace_id, user_id, team_id, player_order, joined_at
-               ) VALUES (?, ?, ?, ?, ?, ?)
-               ON CONFLICT(game_id, user_id) DO NOTHING`,
-            )
-            .bind(
-              game.id,
-              game.workspaceId,
-              player.userId,
-              team.id,
-              player.position - 1,
-              player.joinedAt,
-            ),
-        ),
-      ),
-    ];
-
-    await this.database.batch(statements);
+  async archive(session: CompletedSession): Promise<void> {
+    await this.database
+      .prepare(
+        `INSERT INTO sessions (
+           id, workspace_id, channel_id, message_ts, format_json, teams_json,
+           game_scores, created_at, ready_at, completed_at, submitted_by,
+           updated_at, updated_by
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           game_scores = excluded.game_scores,
+           updated_at = excluded.updated_at,
+           updated_by = excluded.updated_by
+         WHERE excluded.updated_at >= sessions.updated_at`,
+      )
+      .bind(
+        session.id,
+        session.workspaceId,
+        session.channelId,
+        session.messageTs ?? null,
+        JSON.stringify(session.format),
+        JSON.stringify(session.teams),
+        JSON.stringify(session.gameScores),
+        session.createdAt,
+        session.readyAt ?? null,
+        session.completedAt,
+        session.submittedBy,
+        session.updatedAt,
+        session.updatedBy,
+      )
+      .run();
   }
 
   async getEditable(
-    gameId: string,
+    sessionId: string,
     workspaceId: string,
     userId: string,
-  ): Promise<CompletedGame> {
-    const game = await this.get(gameId, workspaceId);
-    if (!game) throw new ResultSessionNotEligibleError();
-    if (!isParticipant(game, userId)) throw new ResultPermissionError();
-    return game;
+  ): Promise<CompletedSession> {
+    const session = await this.get(sessionId, workspaceId);
+    if (!session) throw new ResultSessionNotEligibleError();
+    if (!isParticipant(session, userId)) throw new ResultPermissionError();
+    return session;
   }
 
   async amend(
-    gameId: string,
+    sessionId: string,
     workspaceId: string,
     userId: string,
-    scores: Record<string, number>,
+    gameScores: TeamId[],
     at: string,
-  ): Promise<CompletedGameMutation> {
-    const previous = await this.getEditable(gameId, workspaceId, userId);
-    if (sameScores(previous.scores, scores)) {
+  ): Promise<CompletedSessionMutation> {
+    const previous = await this.getEditable(sessionId, workspaceId, userId);
+    if (sameGameScores(previous.gameScores, gameScores)) {
       return { current: previous, previous };
     }
 
     const result = await this.database
       .prepare(
-        `UPDATE games
-         SET scores_json = ?, updated_at = ?, updated_by = ?
+        `UPDATE sessions
+         SET game_scores = ?, updated_at = ?, updated_by = ?
          WHERE id = ? AND workspace_id = ?
            AND EXISTS (
-             SELECT 1 FROM game_participants
-             WHERE game_id = games.id AND user_id = ?
+             SELECT 1
+             FROM json_each(sessions.teams_json) team
+             JOIN json_each(team.value, '$.players') player
+             WHERE json_extract(player.value, '$.userId') = ?
            )`,
       )
-      .bind(JSON.stringify(scores), at, userId, gameId, workspaceId, userId)
+      .bind(
+        JSON.stringify(gameScores),
+        at,
+        userId,
+        sessionId,
+        workspaceId,
+        userId,
+      )
       .run();
     if (result.meta.changes !== 1) throw new ResultSessionNotEligibleError();
 
     return {
-      current: { ...previous, scores, updatedAt: at, updatedBy: userId },
+      current: { ...previous, gameScores, updatedAt: at, updatedBy: userId },
       previous,
     };
   }
 
   async get(
-    gameId: string,
+    sessionId: string,
     workspaceId: string,
-  ): Promise<CompletedGame | null> {
+  ): Promise<CompletedSession | null> {
     const row = await this.database
       .prepare(
         `SELECT id, workspace_id, channel_id, message_ts, format_json,
-           teams_json, scores_json, created_at, ready_at, completed_at,
+           teams_json, game_scores, created_at, ready_at, completed_at,
            submitted_by, updated_at, updated_by
-         FROM games WHERE id = ? AND workspace_id = ?`,
+         FROM sessions WHERE id = ? AND workspace_id = ?`,
       )
-      .bind(gameId, workspaceId)
-      .first<GameRow>();
-    return row ? mapGame(row) : null;
+      .bind(sessionId, workspaceId)
+      .first<SessionRow>();
+    return row ? mapSession(row) : null;
   }
 }
 
-function mapGame(row: GameRow): CompletedGame {
+function mapSession(row: SessionRow): CompletedSession {
   return {
     channelId: row.channel_id,
     completedAt: row.completed_at,
     createdAt: row.created_at,
     format: JSON.parse(row.format_json),
+    gameScores: JSON.parse(row.game_scores),
     id: row.id,
     ...(row.message_ts ? { messageTs: row.message_ts } : {}),
     ...(row.ready_at ? { readyAt: row.ready_at } : {}),
-    scores: JSON.parse(row.scores_json),
     submittedBy: row.submitted_by,
     teams: JSON.parse(row.teams_json),
     updatedAt: row.updated_at,
@@ -160,16 +151,15 @@ function mapGame(row: GameRow): CompletedGame {
   };
 }
 
-function isParticipant(game: CompletedGame, userId: string): boolean {
-  return game.teams.some((team) =>
+function isParticipant(session: CompletedSession, userId: string): boolean {
+  return session.teams.some((team) =>
     team.players.some((player) => player.userId === userId),
   );
 }
 
-function sameScores(
-  left: Record<string, number>,
-  right: Record<string, number>,
-): boolean {
-  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
-  return [...keys].every((key) => left[key] === right[key]);
+function sameGameScores(left: TeamId[], right: TeamId[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((winner, index) => winner === right[index])
+  );
 }

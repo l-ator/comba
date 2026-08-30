@@ -23,11 +23,12 @@ import {
 import {
   DEFAULT_GAME_FORMAT,
   SessionStatus,
-  type CompletedGame,
-  type CompletedGameMutation,
+  type CompletedSession,
+  type CompletedSessionMutation,
   type BenchOutcome,
   type LiveSession,
   type SessionRoomState,
+  type TeamId,
 } from "@comba/domain/session/model";
 import { bench, hasPlayer, joinOrSwitch } from "@comba/domain/session/rules";
 
@@ -206,7 +207,7 @@ export class DoSessionRoom extends DurableObject<CombaBindings> {
 
   async complete(
     command: CompleteRoomCommand,
-  ): Promise<SessionRoomResult<CompletedGame>> {
+  ): Promise<SessionRoomResult<CompletedSession>> {
     const state = await this.load();
     const matched = this.match(state, command.sessionId);
     if (!matched.ok) return matched;
@@ -223,7 +224,7 @@ export class DoSessionRoom extends DurableObject<CombaBindings> {
       );
     }
 
-    const game: CompletedGame = {
+    const completed: CompletedSession = {
       channelId: matched.value.channelId,
       completedAt: command.now,
       createdAt: matched.value.createdAt,
@@ -233,35 +234,41 @@ export class DoSessionRoom extends DurableObject<CombaBindings> {
         ? { messageTs: matched.value.messageTs }
         : {}),
       ...(matched.value.readyAt ? { readyAt: matched.value.readyAt } : {}),
-      scores: command.scores,
+      gameScores: command.gameScores,
       submittedBy: command.userId,
       teams: matched.value.teams,
       updatedAt: command.now,
       updatedBy: command.userId,
       workspaceId: matched.value.workspaceId,
     };
-    const pendingArchives = { ...state.pendingArchives, [game.id]: game };
+    const pendingArchives = {
+      ...state.pendingArchives,
+      [completed.id]: completed,
+    };
     await this.save({ ...state, activeSession: null, pendingArchives });
     if (Object.keys(pendingArchives).length > MAX_EXPECTED_PENDING_ARCHIVES) {
       console.warn("Ċomba archive outbox is unexpectedly large", {
         count: Object.keys(pendingArchives).length,
-        workspaceId: game.workspaceId,
+        workspaceId: completed.workspaceId,
       });
     }
-    this.ctx.waitUntil(this.flushArchive(game.id));
-    return success(game);
+    this.ctx.waitUntil(this.flushArchive(completed.id));
+    return success(completed);
   }
 
   async amendPending(
-    gameId: string,
+    sessionId: string,
     userId: string,
-    scores: Record<string, number>,
+    gameScores: TeamId[],
     now: string,
-  ): Promise<SessionRoomResult<CompletedGameMutation>> {
+  ): Promise<SessionRoomResult<CompletedSessionMutation>> {
     const state = await this.load();
-    const previous = state.pendingArchives[gameId];
+    const previous = state.pendingArchives[sessionId];
     if (!previous) {
-      return failure("SESSION_NOT_FOUND", "This game is not pending archival.");
+      return failure(
+        "SESSION_NOT_FOUND",
+        "This session is not pending archival.",
+      );
     }
     if (
       !previous.teams.some((team) =>
@@ -275,15 +282,15 @@ export class DoSessionRoom extends DurableObject<CombaBindings> {
     }
     const current = {
       ...previous,
-      scores,
+      gameScores,
       updatedAt: now,
       updatedBy: userId,
     };
     await this.save({
       ...state,
-      pendingArchives: { ...state.pendingArchives, [gameId]: current },
+      pendingArchives: { ...state.pendingArchives, [sessionId]: current },
     });
-    this.ctx.waitUntil(this.flushArchive(gameId));
+    this.ctx.waitUntil(this.flushArchive(sessionId));
     return success({ current, previous });
   }
 
@@ -310,8 +317,8 @@ export class DoSessionRoom extends DurableObject<CombaBindings> {
 
   private async flushPendingArchives(): Promise<void> {
     const state = await this.load();
-    for (const gameId of Object.keys(state.pendingArchives)) {
-      await this.flushArchive(gameId);
+    for (const sessionId of Object.keys(state.pendingArchives)) {
+      await this.flushArchive(sessionId);
     }
   }
 
@@ -373,30 +380,35 @@ export class DoSessionRoom extends DurableObject<CombaBindings> {
     }
   }
 
-  private async flushArchive(gameId: string): Promise<void> {
+  private async flushArchive(sessionId: string): Promise<void> {
     const state = await this.load();
-    const game = state.pendingArchives[gameId];
-    if (!game) return;
+    const session = state.pendingArchives[sessionId];
+    if (!session) return;
     try {
-      await this.history.archive(game);
+      await this.history.archive(session);
       try {
-        await this.leaderboardLists.sync(game.workspaceId, game.channelId);
+        await this.leaderboardLists.sync(
+          session.workspaceId,
+          session.channelId,
+        );
       } catch (error) {
         console.error("Failed to synchronize Ċomba leaderboard after archive", {
           error: errorDetails(error),
-          gameId,
+          sessionId,
         });
       }
       const latest = await this.load();
-      if (latest.pendingArchives[gameId]?.updatedAt === game.updatedAt) {
+      if (
+        latest.pendingArchives[sessionId]?.updatedAt === session.updatedAt
+      ) {
         const pendingArchives = { ...latest.pendingArchives };
-        delete pendingArchives[gameId];
+        delete pendingArchives[sessionId];
         await this.save({ ...latest, pendingArchives });
       }
     } catch (error) {
       console.error("Failed to archive completed Ċomba game", {
         error: errorDetails(error),
-        gameId,
+        sessionId,
       });
       await this.ctx.storage.setAlarm(Date.now() + RETRY_DELAY_MS);
     }

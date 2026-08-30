@@ -129,9 +129,8 @@ describe("CombaInteractionHandler", () => {
     expect(response.status).toBe(200);
     expect(resultService.record).toHaveBeenCalledWith({
       channelId: "C-COMBA",
+      gameScores: ["A", "A", "A", "A", "A", "B", "B"],
       sessionId: "session-1",
-      teamAWins: 5,
-      teamBWins: 2,
       userId: "U-ALICE",
       workspaceId: "T-PERSONAL",
     });

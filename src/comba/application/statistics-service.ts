@@ -133,24 +133,14 @@ export class StatisticsService {
     playerId: string,
     limit = 5,
   ): Promise<GameOutcome[]> {
-    const sessions = await this.repository.getRecentGames(
+    const games = await this.repository.getRecentGames(
       workspaceId,
       playerId,
       limit,
     );
-    const outcomes: GameOutcome[] = [];
-    for (const session of [...sessions].reverse()) {
-      const team = session.teams.find((t) =>
-        t.players.some((p) => p.userId === playerId),
-      );
-      if (!team) continue;
-      const opponentId = team.id === "A" ? "B" : "A";
-      const wins = session.scores[team.id] ?? 0;
-      const losses = session.scores[opponentId] ?? 0;
-      for (let i = 0; i < wins; i++) outcomes.push(GameOutcome.WON);
-      for (let i = 0; i < losses; i++) outcomes.push(GameOutcome.LOST);
-    }
-    return outcomes.slice(-limit).reverse();
+    return games.map((game) =>
+      game.won ? GameOutcome.WON : GameOutcome.LOST,
+    );
   }
 }
 

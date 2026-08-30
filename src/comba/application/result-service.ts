@@ -1,10 +1,11 @@
 import { inject, Lifecycle, scoped } from "tsyringe";
 
 import { TOKENS } from "@shared/di/tokens";
-import { completedGameToView, liveSessionToView } from "./models/session-view";
+import { completedSessionToView, liveSessionToView } from "./models/session-view";
 import type { SessionRoomPort } from "./ports/session-room";
 import type { SessionRoomFailure } from "@comba/domain/session/room-result";
-import type { CompletedGameMutation } from "@comba/domain/session/model";
+import type { CompletedSessionMutation } from "@comba/domain/session/model";
+import type { TeamId } from "@comba/domain/session/model";
 import type { GameHistoryPort } from "./ports/game-history";
 import {
   InvalidResultError,
@@ -23,8 +24,7 @@ export interface ResultActorInput {
 }
 
 export interface RecordResultInput extends ResultActorInput {
-  teamAWins: number;
-  teamBWins: number;
+  gameScores: TeamId[];
 }
 
 export const MAX_GAMES_PER_SESSION = 10;
@@ -50,7 +50,7 @@ export class ResultService {
     );
     if (live.ok) return liveSessionToView(live.value);
     if (live.error.code !== "SESSION_NOT_FOUND") throw mapFailure(live);
-    return completedGameToView(
+    return completedSessionToView(
       await this.history.getEditable(
         input.sessionId,
         input.workspaceId,
@@ -60,8 +60,7 @@ export class ResultService {
   }
 
   async record(input: RecordResultInput): Promise<ResultMutation> {
-    validateScores(input.teamAWins, input.teamBWins);
-    const scores = { A: input.teamAWins, B: input.teamBWins };
+    validateGameScores(input.gameScores);
     const at = this.now().toISOString();
 
     const completed = await this.rooms.complete(
@@ -69,7 +68,7 @@ export class ResultService {
       input.channelId,
       {
         now: at,
-        scores,
+        gameScores: input.gameScores,
         sessionId: input.sessionId,
         userId: input.userId,
       },
@@ -77,7 +76,7 @@ export class ResultService {
     if (completed.ok) {
       return {
         previousResult: null,
-        state: completedGameToView(completed.value),
+        state: completedSessionToView(completed.value),
       };
     }
     if (completed.error.code !== "SESSION_NOT_FOUND")
@@ -88,7 +87,7 @@ export class ResultService {
       input.channelId,
       input.sessionId,
       input.userId,
-      scores,
+      input.gameScores,
       at,
     );
     if (pending.ok) return mutationToView(pending.value);
@@ -99,7 +98,7 @@ export class ResultService {
         input.sessionId,
         input.workspaceId,
         input.userId,
-        scores,
+        input.gameScores,
         at,
       ),
     );
@@ -115,10 +114,10 @@ export class ResultService {
   }
 }
 
-function mutationToView(mutation: CompletedGameMutation): ResultMutation {
-  const state = completedGameToView(mutation.current);
+function mutationToView(mutation: CompletedSessionMutation): ResultMutation {
+  const state = completedSessionToView(mutation.current);
   const previous = mutation.previous
-    ? completedGameToView(mutation.previous).result
+    ? completedSessionToView(mutation.previous).result
     : null;
   return { previousResult: previous, state };
 }
@@ -129,25 +128,18 @@ function mapFailure(failure: SessionRoomFailure): Error {
   return new ResultSessionNotEligibleError();
 }
 
-function validateScores(teamAWins: number, teamBWins: number): void {
-  for (const [team, value] of [
-    ["Team A", teamAWins],
-    ["Team B", teamBWins],
-  ] as const) {
-    if (!Number.isInteger(value) || value < 0) {
-      throw new InvalidResultError(
-        `${team} wins must be a non-negative integer.`,
-      );
-    }
-  }
-  if (teamAWins + teamBWins === 0) {
+function validateGameScores(gameScores: TeamId[]): void {
+  if (gameScores.length === 0) {
     throw new InvalidResultError(
       "A 0–0 result does not count as a played session.",
     );
   }
-  if (teamAWins + teamBWins > MAX_GAMES_PER_SESSION) {
+  if (gameScores.length > MAX_GAMES_PER_SESSION) {
     throw new InvalidResultError(
       `A session can contain at most ${MAX_GAMES_PER_SESSION} games.`,
     );
+  }
+  if (gameScores.some((winner) => winner !== "A" && winner !== "B")) {
+    throw new InvalidResultError("Every game must be won by Team A or Team B.");
   }
 }

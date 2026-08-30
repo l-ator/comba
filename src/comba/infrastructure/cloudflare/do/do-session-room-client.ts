@@ -9,6 +9,7 @@ import type {
 } from "@comba/application/ports/session-room";
 import type { CombaBindings } from "../bindings";
 import type { DoSessionRoom } from "./do-session-room";
+import type { TeamId } from "@comba/domain/session/model";
 
 @scoped(Lifecycle.ContainerScoped)
 export class DoSessionRoomClient implements SessionRoomPort {
@@ -75,15 +76,15 @@ export class DoSessionRoomClient implements SessionRoomPort {
   amendPending(
     workspaceId: string,
     channelId: string,
-    gameId: string,
+    sessionId: string,
     userId: string,
-    scores: Record<string, number>,
+    gameScores: TeamId[],
     now: string,
   ) {
     return this.room(workspaceId, channelId).amendPending(
-      gameId,
+      sessionId,
       userId,
-      scores,
+      gameScores,
       now,
     );
   }
