@@ -1,38 +1,28 @@
 # Ċomba
 
-Ċomba is a small internal Slack app for organizing office table-football sessions and recording results. Its Slack bot is **Ċombot 🤖**.
+Ċomba is an internal Slack app for organizing office table-soccer (Ċomba) sessions and recording/displaying game outcomes.
 
-The current system shape is documented in [`docs/architecture.md`](./docs/architecture.md); the Durable Object migration rationale is recorded in [`docs/decisions/001-durable-session-room.md`](./docs/decisions/001-durable-session-room.md).
-
-## Proposed stack
-
-- TypeScript
-- Cloudflare Workers
-- Cloudflare D1
-- Cloudflare Cron Triggers
-- Slack HTTP APIs and interactive Block Kit surfaces
-- D1 SQL migrations and repository adapters
-- Vitest
-
-This stack is intended to remain within free allowances for a small internal office bot. Hosting and the Slack installation should ultimately use accounts approved by Tipico.
+The app is built in Typescript and runs in a Cloudflare native environment (workers).
 
 ## Implemented flow
 
-- `/comba` creates one five-minute lobby per channel.
-- The creator starts in Team A.
-- Signed Slack interactions support joining either team, leaving, and creator cancellation.
-- The fourth player atomically transitions the session to READY.
-- Durable Object alarms expire overdue lobbies and retry pending D1 archives.
-- Participants can record or correct aggregate scores through a modal.
-- `/comba stats [@user]` shows individual statistics.
-- `/comba h2h @user` shows opponent and teammate performance.
-- `/comba leaderboard` ranks every player by games won and shows fun aggregate stats.
-- `/comba admin list sync` creates or refreshes a native sortable Slack leaderboard List for configured administrators.
-- An hourly Cron Trigger reconciles configured leaderboard Lists.
+#### Commands
+- `/comba` creates a session within the channel - the creator automatically joins one of the teams.
+  - Slack interactions allow other users to join. Once the lobby is full, the session transition to READY.
+  - Once the game/s are played, participants input the results manually - results are stored for history and stats.
+- `/comba stats [@user]` shows individual player statistics.
+- `/comba h2h @user1 [@user2]` shows head-to-head player performance and comparisons.
+- `/comba leaderboard` ranks every player by games won aggregate stats.
+
+#### Views
+- On every result submission, a Leaderboard _Slack List_ is generated. The list can be displayed in the related channel as an extra tab. 
 
 ## Local development
 
-Prerequisites: Node.js and npm.
+Prerequisites: 
+- Node.js and npm.
+- Cloudflare/Wrangler account
+- Any slack workspace
 
 ```bash
 npm install
@@ -41,10 +31,10 @@ npm run db:migrate:local
 npm run dev
 ```
 
-The local health endpoint is `http://localhost:8787/health`. Slack credentials in `.dev.vars` are never committed.
+The local health endpoint is `http://localhost:8787/health`. 
+For most functionality, the app requires to be installed in a Slack workspace and wired up in config (`.dev.vars`)
 
 Useful checks:
-
 ```bash
 npm run typecheck
 npm test
@@ -64,7 +54,3 @@ Before deployment, replace these values:
 - `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN` through Wrangler secrets.
 
 See [`docs/slack-setup.md`](./docs/slack-setup.md) for the complete sequence.
-
-## Current status
-
-The core lobby, timeout, result correction, statistics, leaderboard command, and native leaderboard List projection are implemented. History and App Home remain future slices.
