@@ -100,7 +100,7 @@ export function renderOpenLobby(
           },
         ],
         has_header_divider: true,
-        subtitle: `⚽ ${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining`,
+        subtitle: randomLobbyTaunt(),
       }),
     ],
     text: `⚽ Ċomba? ${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining.`,
@@ -219,17 +219,9 @@ function renderCompletedSession(
               ),
             ],
             type: "actions",
-          },
-          {
-            elements: [
-              markdown(
-                `${mentions(state.participants, "A")}  *${result.teamAWins}*   ·   *${result.teamBWins}*  ${mentions(state.participants, "B")}`,
-              ),
-            ],
-            type: "context",
-          },
+          }
         ],
-        subtitle: `🏁 ${mentions(state.participants, "A")} *${result.teamAWins}* – *${result.teamBWins}* ${mentions(state.participants, "B")}`,
+        subtitle: `🏁 Ċomba over`,
       }),
     ],
     text: `🏁 Final result: ${mentions(state.participants, "A")} ${result.teamAWins}–${result.teamBWins} ${mentions(state.participants, "B")}`,
@@ -249,6 +241,29 @@ function terminalView(title: string, detail: string): SlackMessageView {
     ],
     text: `${title}. ${detail}`,
   };
+}
+
+const LOBBY_TAUNTS = [
+  "😏 Talk is cheap. Pick a side.",
+  "👀 Scared of the table?",
+  "🔥 Come get cooked.",
+  "🫵 Don’t just lurk. Join.",
+  "😈 Pick a team and regret it.",
+  "🏆 Someone has to carry.",
+  "💀 Careers will be ended.",
+  "🤡 Confidence check starts here.",
+  "🧂 Salt incoming.",
+  "🥱 Easy win? Prove it.",
+  "🪦 Enter at your own risk.",
+  "🚑 Ego damage possible.",
+  "🎭 Big talk, tiny table.",
+  "🫣 Your excuse won’t save you.",
+];
+
+function randomLobbyTaunt(): string {
+  return (
+    LOBBY_TAUNTS[Math.floor(Math.random() * LOBBY_TAUNTS.length)] ?? ""
+  );
 }
 
 function mentions(participants: SessionParticipant[], team: Team): string {
