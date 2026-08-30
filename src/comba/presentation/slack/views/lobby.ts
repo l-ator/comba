@@ -182,7 +182,7 @@ function renderReadyLobby(state: SessionWithParticipants): SlackMessageView {
           },
         ],
         has_header_divider: true,
-        subtitle: `🔥 Full lobby ${mentions(state.participants, "A")} vs ${mentions(state.participants, "B")}`,
+        subtitle: `🔥 Full lobby`,
       }),
     ],
     text: `🔥 Ċomba is on: ${mentions(state.participants, "A")} vs ${mentions(state.participants, "B")}`,
