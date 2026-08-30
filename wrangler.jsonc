@@ -19,7 +19,7 @@
         {
           "binding": "DB",
           "database_name": "comba-dev",
-          "database_id": "d64266ac-d99a-4014-8a0a-ce41aff0e0de",
+          "database_id": "12887813-a645-4dc8-9321-5a1bf24bfc97",
           "migrations_dir": "resources/migrations"
         }
       ],

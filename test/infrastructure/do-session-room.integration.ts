@@ -54,24 +54,27 @@ describe("DoSessionRoom", () => {
 
     const completed = await room.complete({
       now: "2099-08-29T18:10:00.000Z",
-      scores: { A: 6, B: 4 },
+      gameScores: ["A", "A", "A", "A", "A", "A", "B", "B", "B", "B"],
       sessionId: "session-archive",
       userId: "U-MARIO",
     });
 
     expect(completed).toMatchObject({
       ok: true,
-      value: { id: "session-archive", scores: { A: 6, B: 4 } },
+      value: {
+        gameScores: ["A", "A", "A", "A", "A", "A", "B", "B", "B", "B"],
+        id: "session-archive",
+      },
     });
     await expect(room.inspect()).resolves.toMatchObject({
       activeSession: null,
     });
 
     await expect(
-      env.DB!.prepare("SELECT scores_json FROM games WHERE id = ?")
+      env.DB!.prepare("SELECT game_scores FROM sessions WHERE id = ?")
         .bind("session-archive")
-        .first("scores_json"),
-    ).resolves.toBe('{"A":6,"B":4}');
+        .first("game_scores"),
+    ).resolves.toBe('["A","A","A","A","A","A","B","B","B","B"]');
   });
 });
 

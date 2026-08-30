@@ -1,20 +1,21 @@
 import type {
-  CompletedGame,
-  CompletedGameMutation,
+  CompletedSession,
+  CompletedSessionMutation,
+  TeamId,
 } from "@comba/domain/session/model";
 
 export interface GameHistoryPort {
   amend(
-    gameId: string,
+    sessionId: string,
     workspaceId: string,
     userId: string,
-    scores: Record<string, number>,
+    gameScores: TeamId[],
     at: string,
-  ): Promise<CompletedGameMutation>;
-  archive(game: CompletedGame): Promise<void>;
+  ): Promise<CompletedSessionMutation>;
+  archive(session: CompletedSession): Promise<void>;
   getEditable(
-    gameId: string,
+    sessionId: string,
     workspaceId: string,
     userId: string,
-  ): Promise<CompletedGame>;
+  ): Promise<CompletedSession>;
 }

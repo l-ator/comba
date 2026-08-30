@@ -1,5 +1,3 @@
-import type { Team } from "@comba/domain/session/model";
-
 export interface PlayerStatisticsRecord {
   gamesLost: number;
   gamesPlayed: number;
@@ -34,10 +32,9 @@ export interface HeadToHeadNeedleRecord {
 }
 
 export interface GameOutcomeRecord {
-  gameId: string;
-  teams: Team[];
+  sessionId: string;
+  gameIndex: number;
   won: boolean;
-  scores: Record<string, number>;
   completedAt: string;
 }
 

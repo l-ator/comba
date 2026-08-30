@@ -5,8 +5,10 @@ export enum SessionStatus {
 
 export interface TeamDefinition {
   capacity: number;
-  id: string;
+  id: TeamId;
 }
+
+export type TeamId = "A" | "B";
 
 export interface GameFormat {
   id: string;
@@ -20,7 +22,7 @@ export interface Player {
 }
 
 export interface Team {
-  id: string;
+  id: TeamId;
   players: Player[];
 }
 
@@ -39,7 +41,7 @@ export interface LiveSession {
   workspaceId: string;
 }
 
-export interface CompletedGame {
+export interface CompletedSession {
   channelId: string;
   completedAt: string;
   createdAt: string;
@@ -47,7 +49,7 @@ export interface CompletedGame {
   id: string;
   messageTs?: string;
   readyAt?: string;
-  scores: Record<string, number>;
+  gameScores: TeamId[];
   submittedBy: string;
   teams: Team[];
   updatedAt: string;
@@ -60,14 +62,14 @@ export interface BenchOutcome {
   previousSession: LiveSession;
 }
 
-export interface CompletedGameMutation {
-  current: CompletedGame;
-  previous: CompletedGame | null;
+export interface CompletedSessionMutation {
+  current: CompletedSession;
+  previous: CompletedSession | null;
 }
 
 export interface SessionRoomState {
   activeSession: LiveSession | null;
-  pendingArchives: Record<string, CompletedGame>;
+  pendingArchives: Record<string, CompletedSession>;
   pendingExpirations: Record<string, LiveSession>;
 }
 
