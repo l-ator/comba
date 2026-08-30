@@ -140,6 +140,11 @@ export class SessionService {
     cancelled.session.status = "CANCELLED";
     return cancelled;
   }
+
+  async abortActive(workspaceId: string, channelId: string): Promise<void> {
+    const result = await this.rooms.cancelActive(workspaceId, channelId);
+    if (!result.ok) throw mapFailure(result);
+  }
 }
 
 function mapFailure(failure: SessionRoomFailure): Error {

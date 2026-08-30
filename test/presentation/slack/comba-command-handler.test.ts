@@ -54,6 +54,66 @@ describe("CombaCommandHandler", () => {
     });
   });
 
+  it("aborts the running session in this channel for an administrator", async () => {
+    const { dependencies } = setup();
+    const response = await handleCombaCommand(
+      command({ text: "admin cancel" }),
+      dependencies,
+      new Set(["U-MARIO"]),
+    );
+    expect(dependencies.sessionService.abortActive).toHaveBeenCalledWith(
+      "T-PERSONAL",
+      "C-COMBA",
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      text: expect.stringContaining("Cancelled the running Ċomba"),
+    });
+  });
+
+  it("accepts 'admin abort' as an alias for cancel", async () => {
+    const { dependencies } = setup();
+    await handleCombaCommand(
+      command({ text: "admin abort" }),
+      dependencies,
+      new Set(["U-MARIO"]),
+    );
+    expect(dependencies.sessionService.abortActive).toHaveBeenCalledWith(
+      "T-PERSONAL",
+      "C-COMBA",
+    );
+  });
+
+  it("rejects aborting a session for other users", async () => {
+    const { dependencies } = setup();
+    const response = await handleCombaCommand(
+      command({ text: "admin cancel" }),
+      dependencies,
+      new Set(),
+    );
+    expect(dependencies.sessionService.abortActive).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({
+      text: expect.stringContaining("administrator"),
+    });
+  });
+
+  it("reports when no session is running in the channel", async () => {
+    const { dependencies } = setup();
+    const { SessionNotFoundError } = await import(
+      "@comba/application/session-errors"
+    );
+    dependencies.sessionService.abortActive.mockRejectedValueOnce(
+      new SessionNotFoundError(),
+    );
+    const response = await handleCombaCommand(
+      command({ text: "admin cancel" }),
+      dependencies,
+      new Set(["U-MARIO"]),
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      text: expect.stringContaining("no longer exists"),
+    });
+  });
+
   it("renders every player in the global leaderboard", async () => {
     const { dependencies, statisticsService } = setup();
     const response = await handleCombaCommand(
@@ -285,6 +345,7 @@ function setup() {
   const sessionService = {
     allowedChannelId: "C-COMBA",
     abandonUnpublished: repository.cancelUnpublished,
+    abortActive: vi.fn(async () => undefined),
     attachMessage: repository.setMessageTimestamp,
     start: vi.fn(
       async (input: {
@@ -387,13 +448,14 @@ function command(overrides: Partial<CombaCommand> = {}): CombaCommand {
 function handleCombaCommand(
   command: CombaCommand,
   dependencies: ReturnType<typeof setup>["dependencies"],
+  adminUserIds: Set<string> = new Set(),
 ): Promise<Response> {
   return new CombaCommandHandler(
     dependencies.sessionService as never,
     dependencies.statisticsService as never,
     dependencies.slackClient,
     { sync: vi.fn() } as never,
-    new Set(),
+    adminUserIds,
   ).handle(command);
 }
 

@@ -4,6 +4,7 @@ import { TOKENS } from "@shared/di/tokens";
 import {
   OpenSessionExistsError,
   SessionChannelNotAllowedError,
+  SessionNotFoundError,
 } from "@comba/application/session-errors";
 import { SessionService } from "@comba/application/session-service";
 import { errorDetails } from "@shared/observability/error-details";
@@ -47,6 +48,24 @@ export class CombaCommandHandler {
       return ephemeral(
         `${result.created ? "Created" : "Reused"} Ċomba Leaderboard ${result.listId}; wrote ${result.rows} rows at ${result.syncedAt}. Add/select the List in this channel's tabs if Slack does not show it automatically.`,
       );
+    }
+    if (subcommand.type === "admin-abort") {
+      if (!this.adminUserIds.has(command.user_id))
+        return ephemeral(
+          "Only a Ċomba administrator can abort a running session.",
+        );
+      try {
+        await this.sessionService.abortActive(
+          command.team_id,
+          command.channel_id,
+        );
+      } catch (error) {
+        if (error instanceof SessionNotFoundError) {
+          return ephemeral(error.message);
+        }
+        throw error;
+      }
+      return ephemeral("Cancelled the running Ċomba in this channel.");
     }
     if (subcommand.type === "leaderboard") {
       return ephemeral(
@@ -185,6 +204,7 @@ type ParsedSubcommand =
   | { type: "start" }
   | { type: "help" }
   | { type: "leaderboard" }
+  | { type: "admin-abort" }
   | { type: "admin-list-sync" };
 
 function parseSubcommand(text: string): ParsedSubcommand {
@@ -196,6 +216,12 @@ function parseSubcommand(text: string): ParsedSubcommand {
   const [name, ...arguments_] = normalized.split(/\s+/);
   if (name === "admin" && arguments_.join(" ") === "list sync")
     return { type: "admin-list-sync" };
+  if (
+    name === "admin" &&
+    (arguments_.join(" ") === "cancel" || arguments_.join(" ") === "abort")
+  ) {
+    return { type: "admin-abort" };
+  }
   if (name === "leaderboard" && arguments_.length === 0) {
     return { type: "leaderboard" };
   }

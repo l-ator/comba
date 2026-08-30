@@ -121,6 +121,19 @@ export class DoSessionRoom extends DurableObject<CombaBindings> {
     }
   }
 
+  async cancelActive(): Promise<SessionRoomResult<LiveSession>> {
+    const state = await this.expireOverdue(await this.load(), Date.now());
+    const session = state.activeSession;
+    if (!session) {
+      return failure(
+        "SESSION_NOT_FOUND",
+        "No Ċomba session is currently running in this channel.",
+      );
+    }
+    await this.save({ ...state, activeSession: null });
+    return success(session);
+  }
+
   async joinOrSwitch(
     command: JoinRoomCommand,
   ): Promise<SessionRoomResult<LiveSession>> {
