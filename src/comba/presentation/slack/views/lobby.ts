@@ -5,6 +5,7 @@ import type {
   TeamPosition,
 } from "@comba/application/models/session-view";
 import type { SlackMessageView } from "./types";
+import { cardContainer } from "./cards";
 
 export const COMBA_INTERACTION_IDS = {
   bench: "comba.bench",
@@ -69,33 +70,37 @@ export function renderOpenLobby(
 ): SlackMessageView {
   const { participants, session } = state;
   const spotsRemaining = 4 - participants.length;
-  const expiresAt = Math.floor(new Date(session.expiresAt).getTime() / 1_000);
 
   return {
     blocks: [
-      { text: plainText("⚽ Ċomba?"), type: "header" },
-      ...teamBlocks("⚪", "TEAM A", "A", participants, session.id),
-      ...teamBlocks("🔴", "TEAM B", "B", participants, session.id),
-      {
-        block_id: "comba.lobby.bench",
-        elements: [
-          button(
-            "Bench me",
-            COMBA_INTERACTION_IDS.bench,
-            session.id,
-            "primary",
-          ),
+      cardContainer("Ċomba?", {
+        child_blocks: [
+          ...teamBlocks("⚪", "TEAM A", "A", participants, session.id),
+          ...teamBlocks("🔴", "TEAM B", "B", participants, session.id),
+          {
+            block_id: "comba.lobby.bench",
+            elements: [
+              button(
+                "Bench me",
+                COMBA_INTERACTION_IDS.bench,
+                session.id,
+                "primary",
+              ),
+            ],
+            type: "actions",
+          },
+          {
+            elements: [
+              markdown(
+                `${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining · ${closesInLabel(session.expiresAt)} · created by <@${session.creatorUserId}>`,
+              ),
+            ],
+            type: "context",
+          },
         ],
-        type: "actions",
-      },
-      {
-        elements: [
-          markdown(
-            `${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining · closes <t:${expiresAt}:R>`,
-          ),
-        ],
-        type: "context",
-      },
+        has_header_divider: true,
+        subtitle: randomLobbyTaunt(),
+      }),
     ],
     text: `⚽ Ċomba? ${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining.`,
   };
@@ -145,27 +150,40 @@ function joinActionId(team: Team, position: TeamPosition): string {
 function renderReadyLobby(state: SessionWithParticipants): SlackMessageView {
   return {
     blocks: [
-      { text: plainText("🔥 ĊOMBA IS ON"), type: "header" },
-      ...teamBlocks("⚪", "TEAM A", "A", state.participants, state.session.id),
-      ...teamBlocks("🔴", "TEAM B", "B", state.participants, state.session.id),
-      {
-        block_id: "comba.result.actions",
-        elements: [
-          button(
-            "Record result",
-            COMBA_INTERACTION_IDS.recordResult,
-            state.session.id,
-            "primary",
-          ),
-          button(
-            "Bench me",
-            COMBA_INTERACTION_IDS.bench,
-            state.session.id,
-            "primary",
-          ),
+      cardContainer("Ċomba is on", {
+        child_blocks: [
+          ...teamBlocks("⚪", "TEAM A", "A", state.participants, state.session.id),
+          ...teamBlocks("🔴", "TEAM B", "B", state.participants, state.session.id),
+          {
+            block_id: "comba.result.actions",
+            elements: [
+              button(
+                "Record result",
+                COMBA_INTERACTION_IDS.recordResult,
+                state.session.id,
+                "primary",
+              ),
+              button(
+                "Bench me",
+                COMBA_INTERACTION_IDS.bench,
+                state.session.id,
+                "primary",
+              ),
+            ],
+            type: "actions",
+          },
+          {
+            elements: [
+              markdown(
+                `Full lobby · hit *Record result* when the match is done`,
+              ),
+            ],
+            type: "context",
+          },
         ],
-        type: "actions",
-      },
+        has_header_divider: true,
+        subtitle: `🔥 Full lobby`,
+      }),
     ],
     text: `🔥 Ċomba is on: ${mentions(state.participants, "A")} vs ${mentions(state.participants, "B")}`,
   };
@@ -181,38 +199,75 @@ function renderCompletedSession(
   const { result } = state;
   return {
     blocks: [
-      { text: plainText("🏁 FINAL RESULT"), type: "header" },
-      {
-        text: markdown(
-          `${mentions(state.participants, "A")}  *${result.teamAWins}*\n${mentions(state.participants, "B")}  *${result.teamBWins}*`,
-        ),
-        type: "section",
-      },
-      {
-        block_id: "comba.result.actions",
-        elements: [
-          button(
-            "Correct result",
-            COMBA_INTERACTION_IDS.recordResult,
-            state.session.id,
-            "primary",
-          ),
+      cardContainer("Final result", {
+        child_blocks: [
+          {
+            text: markdown(
+              `${mentions(state.participants, "A")}  *${result.teamAWins}*\n${mentions(state.participants, "B")}  *${result.teamBWins}*`,
+            ),
+            type: "section",
+          },
+          {
+            block_id: "comba.result.actions",
+            elements: [
+              button(
+                "Edit result",
+                COMBA_INTERACTION_IDS.recordResult,
+                state.session.id,
+                "primary",
+              ),
+            ],
+            type: "actions",
+          }
         ],
-        type: "actions",
-      },
+        subtitle: `🏁 Ċomba over`,
+      }),
     ],
     text: `🏁 Final result: ${mentions(state.participants, "A")} ${result.teamAWins}–${result.teamBWins} ${mentions(state.participants, "B")}`,
   };
 }
 
 function terminalView(title: string, detail: string): SlackMessageView {
+  const emoji = title.match(/^(\p{Extended_Pictographic}\s*)/u)?.[1] ?? "";
+  const plain = title.replace(/^\p{Extended_Pictographic}\s*/u, "");
   return {
     blocks: [
-      { text: plainText(title), type: "header" },
-      { text: markdown(detail), type: "section" },
+      cardContainer(plain, {
+        child_blocks: [
+          { text: markdown(`${emoji}${detail}`), type: "section" },
+        ],
+      }),
     ],
     text: `${title}. ${detail}`,
   };
+}
+
+const LOBBY_TAUNTS = [
+  "🫵 Talk is cheap. Pick a side",
+  "👻 Scared of the table?",
+  "🧑‍🍳 Come get cooked",
+  "😈 Pick a team and regret it",
+  "⚔️ Grab a teammate – Find some rivals",
+  "🏆 Someone has to carry",
+  "💀 Careers will be ended",
+  "🤡 Confidence check starts here",
+  "🧂 Salt incoming",
+  "🪦 Enter at your own risk",
+  "🚑 Ego damage possible",
+  "🎭 Big talk – tiny table",
+  "🎰 No skill, only free spins",
+  "💩 Winners talk shit"
+];
+
+function randomLobbyTaunt(): string {
+  return (
+    LOBBY_TAUNTS[Math.floor(Math.random() * LOBBY_TAUNTS.length)] ?? ""
+  );
+}
+
+function closesInLabel(expiresAt: string): string {
+  const unix = Math.floor(new Date(expiresAt).getTime() / 1_000);
+  return `closes <!date^${unix}^{time}|later today>`;
 }
 
 function mentions(participants: SessionParticipant[], team: Team): string {

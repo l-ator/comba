@@ -8,6 +8,22 @@ import type { CombaCommand } from "@comba/presentation/slack/schemas/command";
 
 afterEach(() => vi.restoreAllMocks());
 
+function collectBlockText(body: {
+  blocks: Array<{
+    elements?: Array<{ text?: string }>;
+    fields?: Array<{ text: string }>;
+    text?: { text?: string };
+  }>;
+}): string {
+  return body.blocks
+    .flatMap((block) => [
+      block.text?.text ?? "",
+      ...(block.fields?.map((field) => field.text) ?? []),
+      ...(block.elements?.map((element) => element.text ?? "") ?? []),
+    ])
+    .join("\n");
+}
+
 describe("CombaCommandHandler", () => {
   it("runs the hidden leaderboard List sync for an administrator", async () => {
     const { dependencies } = setup();
@@ -134,12 +150,16 @@ describe("CombaCommandHandler", () => {
       dependencies,
     );
 
-    const body = (await response.json()) as { text: string };
+    const body = (await response.json()) as {
+      blocks: Array<{ text?: { text?: string }; fields?: Array<{ text: string }> }>;
+      text: string;
+    };
     expect(body.text).toContain("<@U-MARIO>");
-    expect(body.text).toContain("57.1%");
-    expect(body.text).toContain("Best teammate: <@U-ALICE> (4 games together)");
-    expect(body.text).toContain("Nemesis: <@U-BOB> (lost 2×)");
-    expect(body.text).toContain("Victim: <@U-CHARLIE> (beaten 3×)");
+    const blockText = collectBlockText(body);
+    expect(blockText).toContain("57.1%");
+    expect(blockText).toContain("Best teammate: <@U-ALICE> (4 games together)");
+    expect(blockText).toContain("Nemesis: <@U-BOB> (lost 2×)");
+    expect(blockText).toContain("Victim: <@U-CHARLIE> (beaten 3×)");
     expect(statisticsService.getPlayerStats).toHaveBeenCalledWith(
       "T-PERSONAL",
       "U-MARIO",
@@ -154,9 +174,12 @@ describe("CombaCommandHandler", () => {
       dependencies,
     );
 
-    const body = (await response.json()) as { text: string };
+    const body = (await response.json()) as {
+      blocks: Array<{ text?: { text?: string }; fields?: Array<{ text: string }> }>;
+      text: string;
+    };
     expect(body.text).toContain("<@U-MARIO> vs <@UBOB>");
-    expect(body.text).toContain("As teammates");
+    expect(collectBlockText(body)).toContain("As teammates");
     expect(statisticsService.getHeadToHead).toHaveBeenCalledWith(
       "T-PERSONAL",
       "U-MARIO",

@@ -14,7 +14,7 @@ describe("renderOpenLobby", () => {
     expect(view.text).toBe("⚽ Ċomba? 3 spots remaining.");
     expect(JSON.stringify(view.blocks)).toContain("<@U-MARIO>");
     expect(JSON.stringify(view.blocks)).not.toContain("Available");
-    expect(JSON.stringify(view.blocks)).toContain("<t:1788026700:R>");
+    expect(JSON.stringify(view.blocks)).toContain("<!date^1788026700^{time}|later today>");
 
     const serialized = JSON.stringify(view.blocks);
     for (const actionId of [

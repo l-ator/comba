@@ -19,6 +19,14 @@ import { LeaderboardListService } from "@comba/application/leaderboard-list-serv
 import type { SlackClient, SlackMessageReference } from "./slack-client";
 import type { CombaCommand } from "./schemas/command";
 import { renderOpenLobby } from "./views/lobby";
+import type { SlackMessageView } from "./views/types";
+import {
+  cardContext,
+  cardHeader,
+  cardSection,
+  cardView,
+  divider,
+} from "./views/cards";
 
 @scoped(Lifecycle.ContainerScoped)
 export class CombaCommandHandler {
@@ -45,9 +53,7 @@ export class CombaCommandHandler {
         command.channel_id,
         command.channel_name,
       );
-      return ephemeral(
-        `${result.created ? "Created" : "Reused"} Ċomba Leaderboard ${result.listId}; wrote ${result.rows} rows at ${result.syncedAt}. Add/select the List in this channel's tabs if Slack does not show it automatically.`,
-      );
+      return ephemeral(adminListSyncView(result));
     }
     if (subcommand.type === "admin-abort") {
       if (!this.adminUserIds.has(command.user_id))
@@ -75,13 +81,12 @@ export class CombaCommandHandler {
       );
     }
     if (subcommand.type === "stats") {
+      const playerId = subcommand.playerId ?? command.user_id;
       const stats = await this.statisticsService.getPlayerStats(
         command.team_id,
-        subcommand.playerId ?? command.user_id,
+        playerId,
       );
-      return ephemeral(
-        renderPlayerStats(subcommand.playerId ?? command.user_id, stats),
-      );
+      return ephemeral(renderPlayerStats(playerId, stats));
     }
     if (subcommand.type === "h2h") {
       const [playerAId, playerBId] =
@@ -105,9 +110,7 @@ export class CombaCommandHandler {
           playerBId,
         ),
       ]);
-      return ephemeral(
-        renderComparison(playerAId, playerBId, against, together),
-      );
+      return ephemeral(renderComparison(playerAId, playerBId, against, together));
     }
     if (subcommand.type === "help") {
       return ephemeral(commandHelp());
@@ -194,8 +197,15 @@ export class CombaCommandHandler {
   }
 }
 
-function ephemeral(text: string): Response {
-  return Response.json({ response_type: "ephemeral", text });
+function ephemeral(message: SlackMessageView | string): Response {
+  if (typeof message === "string") {
+    return Response.json({ response_type: "ephemeral", text: message });
+  }
+  return Response.json({
+    blocks: message.blocks,
+    response_type: "ephemeral",
+    text: message.text,
+  });
 }
 
 type ParsedSubcommand =
@@ -248,53 +258,124 @@ function slackMentionId(value: string): string | null {
   return /^<@([A-Z0-9]+)(?:\|[^>]+)?>$/.exec(value)?.[1] ?? null;
 }
 
+interface LeaderboardListSyncOutcome {
+  created: boolean;
+  listId: string;
+  rows: number;
+  syncedAt: string;
+}
+
+function adminListSyncView(outcome: LeaderboardListSyncOutcome): SlackMessageView {
+  return cardView(
+    [
+      cardHeader(outcome.created ? "✨" : "♻️", "Ċomba Leaderboard"),
+      cardSection(
+        outcome.created
+          ? "A fresh leaderboard List was created for this channel."
+          : "Reused the existing leaderboard List for this channel.",
+      ),
+      divider(),
+      cardSection("", {
+        fields: [
+          `*List*\n<@${outcome.listId}>`,
+          `*Rows written*\n${outcome.rows}`,
+          `*Synced at*\n${outcome.syncedAt}`,
+        ],
+      }),
+      cardContext([
+        "Add/select this List in the channel's tabs if Slack does not show it automatically.",
+      ]),
+    ],
+    `${outcome.created ? "Created" : "Reused"} Ċomba Leaderboard ${outcome.listId}; wrote ${outcome.rows} rows.`,
+  );
+}
+
 function renderPlayerStats(
   playerId: string,
   stats: PlayerStats,
-): string {
-  const lines = [
-    `⚽ *<@${playerId}>*`,
-    `Games: *${stats.gamesPlayed}* · Won: *${stats.gamesWon}* · Lost: *${stats.gamesLost}*`,
-    `Game win rate: *${stats.gameWinRate.toFixed(1)}%*`,
+): SlackMessageView {
+  const blocks = [
+    cardHeader("⚽", "Player stats"),
+    cardSection(`<@${playerId}>`),
+    divider(),
+    cardSection("", {
+      fields: [
+        `*Games played*\n${stats.gamesPlayed}`,
+        `*Games won*\n${stats.gamesWon}`,
+        `*Games lost*\n${stats.gamesLost}`,
+        `*Game win rate*\n${stats.gameWinRate.toFixed(1)}%`,
+      ],
+    }),
   ];
+
   const rel = stats.relational;
+  const context: string[] = [];
   if (rel) {
     if (rel.bestTeammate) {
-      lines.push(
+      context.push(
         `🤝 Best teammate: <@${rel.bestTeammate}> (${rel.gamesPlayedTogether} games together)`,
       );
     }
     if (rel.nemesis) {
-      lines.push(`😈 Nemesis: <@${rel.nemesis}> (lost ${rel.nemesisCount}×)`);
+      context.push(`😈 Nemesis: <@${rel.nemesis}> (lost ${rel.nemesisCount}×)`);
     }
     if (rel.victim) {
-      lines.push(`🎯 Victim: <@${rel.victim}> (beaten ${rel.victimCount}×)`);
+      context.push(`🎯 Victim: <@${rel.victim}> (beaten ${rel.victimCount}×)`);
     }
   }
-  return lines.join("\n");
+  if (context.length > 0) {
+    blocks.push(divider(), cardContext(context));
+  }
+
+  return cardView(
+    blocks,
+    `⚽ Stats for <@${playerId}>: ${stats.gamesWon}/${stats.gamesPlayed} wins (${stats.gameWinRate.toFixed(1)}%).`,
+  );
 }
 
-function renderLeaderboard(leaderboard: Leaderboard): string {
+function renderLeaderboard(leaderboard: Leaderboard): SlackMessageView {
   if (leaderboard.players.length === 0) {
-    return "🏆 *Ċomba leaderboard*\nNo games have been recorded yet.";
+    return cardView(
+      [
+        cardHeader("🏆", "Ċomba leaderboard"),
+        cardSection("No games have been recorded yet."),
+      ],
+      "🏆 Ċomba leaderboard\nNo games have been recorded yet.",
+    );
   }
   const medals = ["🥇", "🥈", "🥉"];
   const rows = leaderboard.players.map(
     (player, index) =>
-      `${medals[index] ?? `${index + 1}.`} <@${player.playerId}> — *${player.gamesPlayed}* played · *${player.gamesWon}* won · *${player.gamesLost}* lost`,
+      `${medals[index] ?? `${index + 1}.`} <@${player.playerId}> — ${player.gamesPlayed} played · ${player.gamesWon} won · ${player.gamesLost} lost`,
   );
-  const fun = [
-    leaderboard.biggestWinRatio
-      ? `🔥 Best win ratio: <@${leaderboard.biggestWinRatio.playerId}> (${leaderboard.biggestWinRatio.gameWinRate.toFixed(1)}%)`
-      : null,
-    leaderboard.biggestLossRatio
-      ? `🧊 Biggest loss ratio: <@${leaderboard.biggestLossRatio.playerId}> (${(100 - leaderboard.biggestLossRatio.gameWinRate).toFixed(1)}%)`
-      : null,
-    leaderboard.mostGames
-      ? `🏃 Most games: <@${leaderboard.mostGames.playerId}> (${leaderboard.mostGames.gamesPlayed})`
-      : null,
-  ].filter((line): line is string => line !== null);
-  return ["🏆 *Ċomba leaderboard*", ...rows, "", ...fun].join("\n");
+
+  const fun: string[] = [];
+  if (leaderboard.biggestWinRatio) {
+    fun.push(
+      `🔥 Best win ratio: <@${leaderboard.biggestWinRatio.playerId}> (${leaderboard.biggestWinRatio.gameWinRate.toFixed(1)}%)`,
+    );
+  }
+  if (leaderboard.biggestLossRatio) {
+    fun.push(
+      `🧊 Biggest loss ratio: <@${leaderboard.biggestLossRatio.playerId}> (${(100 - leaderboard.biggestLossRatio.gameWinRate).toFixed(1)}%)`,
+    );
+  }
+  if (leaderboard.mostGames) {
+    fun.push(
+      `🏃 Most games: <@${leaderboard.mostGames.playerId}> (${leaderboard.mostGames.gamesPlayed})`,
+    );
+  }
+
+  return cardView(
+    [
+      cardHeader("🏆", "Ċomba leaderboard"),
+      cardSection(rows.join("\n")),
+      ...(fun.length > 0
+        ? [divider(), cardContext(fun)]
+        : []),
+    ],
+    `🏆 Ċomba leaderboard\n${rows.join("\n")}${fun.length ? `\n${fun.join("\n")}` : ""}`,
+  );
 }
 
 function renderComparison(
@@ -302,27 +383,50 @@ function renderComparison(
   playerBId: string,
   against: HeadToHeadStatistics,
   together: TeammateStatistics,
-): string {
-  return [
-    `⚔️ *<@${playerAId}> vs <@${playerBId}>*`,
-    `Games against: *${against.gamesAgainst}*`,
-    `<@${playerAId}> wins: *${against.playerAWins}* · <@${playerBId}> wins: *${against.playerBWins}*`,
-    `<@${playerAId}> win rate: *${against.playerAWinRate.toFixed(1)}%*`,
-    "",
-    `🤝 *As teammates*`,
-    `Games: *${together.gamesPlayedTogether}* · Won: *${together.gamesWonTogether}* · Lost: *${together.gamesLostTogether}*`,
-    `Win rate together: *${together.winRateTogether.toFixed(1)}%*`,
-  ].join("\n");
+): SlackMessageView {
+  return cardView(
+    [
+      cardHeader("⚔️", "Head to head"),
+      cardSection(`<@${playerAId}> vs <@${playerBId}>`),
+      divider(),
+      cardSection("", {
+        fields: [
+          `*Games against*\n${against.gamesAgainst}`,
+          `*Wins <@${playerAId}>*\n${against.playerAWins}`,
+          `*Wins <@${playerBId}>*\n${against.playerBWins}`,
+          `*Win rate <@${playerAId}>*\n${against.playerAWinRate.toFixed(1)}%`,
+        ],
+      }),
+      divider(),
+      cardHeader("🤝", "As teammates"),
+      cardSection("", {
+        fields: [
+          `*Games together*\n${together.gamesPlayedTogether}`,
+          `*Won together*\n${together.gamesWonTogether}`,
+          `*Lost together*\n${together.gamesLostTogether}`,
+          `*Win rate together*\n${together.winRateTogether.toFixed(1)}%`,
+        ],
+      }),
+    ],
+    `⚔️ <@${playerAId}> vs <@${playerBId}>: ${against.playerAWins}–${against.playerBWins} against (${against.playerAWinRate.toFixed(1)}% win rate); as teammates: ${together.winRateTogether.toFixed(1)}% win rate.`,
+  );
 }
 
-function commandHelp(): string {
-  return [
-    "*Ċomba commands*",
-    "`/comba` — start a lobby",
-    "`/comba stats` — show your statistics",
-    "`/comba stats @user` — show a player's statistics",
-    "`/comba h2h @user` — compare yourself with a player",
-    "`/comba h2h @user1 @user2` — compare two players",
-    "`/comba leaderboard` — show the global leaderboard",
-  ].join("\n");
+function commandHelp(): SlackMessageView {
+  return cardView(
+    [
+      cardHeader("⚽", "Ċomba commands"),
+      cardSection("", {
+        fields: [
+          "`/comba` — start a lobby",
+          "`/comba stats` — your statistics",
+          "`/comba stats @user` — a player's stats",
+          "`/comba h2h @user` — compare with a player",
+          "`/comba h2h @user1 @user2` — compare two players",
+          "`/comba leaderboard` — global leaderboard",
+        ],
+      }),
+    ],
+    "Ċomba commands: /comba, /comba stats, /comba h2h, /comba leaderboard.",
+  );
 }

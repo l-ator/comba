@@ -15,6 +15,7 @@ export interface SlackModalView {
 
 export type SlackBlock =
   | SlackActionsBlock
+  | SlackContainerBlock
   | SlackContextBlock
   | SlackDividerBlock
   | SlackHeaderBlock
@@ -37,6 +38,15 @@ interface SlackButtonElement {
 interface SlackContextBlock {
   elements: SlackMarkdownText[];
   type: "context";
+}
+
+/** A Block Kit wrapper that groups child blocks into a visually distinct card. */
+export interface SlackContainerBlock {
+  child_blocks: SlackBlock[];
+  has_header_divider?: boolean;
+  subtitle?: SlackPlainText | SlackMarkdownText;
+  title: SlackPlainText;
+  type: "container";
 }
 
 interface SlackDividerBlock {

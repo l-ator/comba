@@ -7,7 +7,7 @@ describe("renderResultModal", () => {
   it("prefills scores when correcting an existing result", () => {
     const view = renderResultModal(completedState());
 
-    expect(view.submit.text).toBe("Correct result");
+    expect(view.submit.text).toBe("Edit result");
     expect(view.blocks).toMatchObject([
       { element: { initial_value: "5" } },
       { element: { initial_value: "2" } },
