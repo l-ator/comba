@@ -11,6 +11,13 @@ import type {
   SlackMessageView,
   SlackModalView,
 } from "@comba/presentation/slack/views/types";
+import type {
+  LeaderboardListColumns,
+  LeaderboardListDefinition,
+  LeaderboardListPort,
+  LeaderboardListRow,
+} from "@comba/application/ports/leaderboard-list";
+import { LeaderboardListNotFoundError } from "@comba/application/ports/leaderboard-list";
 
 const slackMessageResponseSchema = z.object({
   channel: z.string().min(1),
@@ -24,14 +31,18 @@ const slackErrorResponseSchema = z.object({
 });
 
 export class SlackApiError extends Error {
-  constructor(message: string) {
+  readonly code?: string;
+
+  constructor(message: string, code?: string) {
     super(message);
     this.name = "SlackApiError";
+    if (code)
+      Object.defineProperty(this, "code", { enumerable: false, value: code });
   }
 }
 
 @scoped(Lifecycle.ContainerScoped)
-export class HttpSlackClient implements SlackClient {
+export class HttpSlackClient implements SlackClient, LeaderboardListPort {
   constructor(
     @inject(TOKENS.slackBotToken) private readonly botToken: string,
     @inject(TOKENS.fetch)
@@ -104,6 +115,158 @@ export class HttpSlackClient implements SlackClient {
     });
   }
 
+  async create(): Promise<LeaderboardListDefinition> {
+    const keys: Array<
+      [keyof LeaderboardListColumns, string, string, boolean?]
+    > = [
+      ["standing", "standing", "Standing", true],
+      ["player", "player", "Player"],
+      ["rank", "rank", "Rank"],
+      ["played", "played", "Played"],
+      ["won", "won", "Won"],
+      ["lost", "lost", "Lost"],
+      ["winRate", "win_rate", "Win rate"],
+      ["lastUpdated", "last_updated", "Last updated"],
+    ];
+    const payload = await this.request("slackLists.create", {
+      name: "Ċomba Leaderboard",
+      schema: keys.map(([property, key, name, primary]) => ({
+        key,
+        name,
+        type:
+          property === "standing"
+            ? "text"
+            : property === "player"
+              ? "user"
+              : property === "lastUpdated"
+                ? "date"
+                : "number",
+        ...(primary ? { is_primary_column: true } : {}),
+        ...(property === "player"
+          ? { options: { format: "single_entity" } }
+          : {}),
+        ...(property === "winRate" ? { options: { precision: 1 } } : {}),
+      })),
+    });
+    const parsed = z
+      .object({
+        list_id: z.string(),
+        list_metadata: z.object({
+          schema: z.array(z.object({ id: z.string(), key: z.string() })),
+        }),
+        ok: z.literal(true),
+      })
+      .parse(payload);
+    const byKey = Object.fromEntries(
+      parsed.list_metadata.schema.map((column) => [column.key, column.id]),
+    );
+    return {
+      listId: parsed.list_id,
+      columns: {
+        standing: requiredColumn(byKey, "standing"),
+        player: requiredColumn(byKey, "player"),
+        rank: requiredColumn(byKey, "rank"),
+        played: requiredColumn(byKey, "played"),
+        won: requiredColumn(byKey, "won"),
+        lost: requiredColumn(byKey, "lost"),
+        winRate: requiredColumn(byKey, "win_rate"),
+        lastUpdated: requiredColumn(byKey, "last_updated"),
+      },
+    };
+  }
+
+  async grantChannelReadAccess(
+    listId: string,
+    channelId: string,
+  ): Promise<void> {
+    await this.requestOk("slackLists.access.set", {
+      access_level: "read",
+      channel_ids: [channelId],
+      list_id: listId,
+    });
+  }
+
+  async listRowIds(listId: string): Promise<string[]> {
+    const ids: string[] = [];
+    let cursor: string | undefined;
+    do {
+      try {
+        const payload = await this.request("slackLists.items.list", {
+          list_id: listId,
+          limit: 100,
+          ...(cursor ? { cursor } : {}),
+        });
+        const parsed = z
+          .object({
+            items: z.array(z.object({ id: z.string() })),
+            ok: z.literal(true),
+            response_metadata: z
+              .object({ next_cursor: z.string().optional() })
+              .optional(),
+          })
+          .parse(payload);
+        ids.push(...parsed.items.map((item) => item.id));
+        cursor = parsed.response_metadata?.next_cursor || undefined;
+      } catch (error) {
+        if (error instanceof SlackApiError && error.code === "list_not_found")
+          throw new LeaderboardListNotFoundError();
+        throw error;
+      }
+    } while (cursor);
+    return ids;
+  }
+
+  async deleteRows(listId: string, rowIds: string[]): Promise<void> {
+    if (rowIds.length)
+      await this.requestOk("slackLists.items.deleteMultiple", {
+        ids: rowIds,
+        list_id: listId,
+      });
+  }
+
+  async writeSnapshot(
+    definition: LeaderboardListDefinition,
+    rows: LeaderboardListRow[],
+  ): Promise<void> {
+    const cells = rows.flatMap((row, index) => {
+      const base = { row_id: newRowId(index), row_id_to_create: true };
+      return [
+        {
+          ...base,
+          column_id: definition.columns.standing,
+          rich_text: richText(row.standing),
+        },
+        { ...base, column_id: definition.columns.player, user: [row.playerId] },
+        { ...base, column_id: definition.columns.rank, number: [row.rank] },
+        {
+          ...base,
+          column_id: definition.columns.played,
+          number: [row.gamesPlayed],
+        },
+        { ...base, column_id: definition.columns.won, number: [row.gamesWon] },
+        {
+          ...base,
+          column_id: definition.columns.lost,
+          number: [row.gamesLost],
+        },
+        {
+          ...base,
+          column_id: definition.columns.winRate,
+          number: [row.gameWinRate],
+        },
+        {
+          ...base,
+          column_id: definition.columns.lastUpdated,
+          date: [row.updatedOn],
+        },
+      ];
+    });
+    await this.requestOk("slackLists.items.update", {
+      cells,
+      list_id: definition.listId,
+    });
+  }
+
   private async call(
     method: "chat.delete" | "chat.postMessage" | "chat.update",
     body: Record<string, unknown>,
@@ -118,7 +281,7 @@ export class HttpSlackClient implements SlackClient {
   }
 
   private async request(
-    method: "chat.delete" | "chat.postMessage" | "chat.update" | "views.open",
+    method: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
     const response = await this.fetcher(`https://slack.com/api/${method}`, {
@@ -141,9 +304,43 @@ export class HttpSlackClient implements SlackClient {
     if (slackError.success) {
       throw new SlackApiError(
         `Slack ${method} failed: ${slackError.data.error}`,
+        slackError.data.error,
       );
     }
 
     return payload;
   }
+
+  private async requestOk(
+    method: string,
+    body: Record<string, unknown>,
+  ): Promise<void> {
+    const payload = await this.request(method, body);
+    if (!z.object({ ok: z.literal(true) }).safeParse(payload).success) {
+      throw new SlackApiError(`Slack ${method} returned an invalid response`);
+    }
+  }
+}
+
+function requiredColumn(columns: Record<string, string>, key: string): string {
+  const value = columns[key];
+  if (!value)
+    throw new SlackApiError(`Slack list response omitted ${key} column`);
+  return value;
+}
+
+function richText(text: string) {
+  return [
+    {
+      type: "rich_text",
+      elements: [
+        { type: "rich_text_section", elements: [{ type: "text", text }] },
+      ],
+    },
+  ];
+}
+
+function newRowId(index: number): string {
+  const random = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
+  return `Rec${random}${index.toString(36).padStart(3, "0")}`.toUpperCase();
 }

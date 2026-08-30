@@ -8,9 +8,100 @@ import type { SlackMessageView } from "@comba/presentation/slack/views/types";
 
 const message: SlackMessageView = { blocks: [], text: "⚽ Ċomba?" };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("HttpSlackClient", () => {
+  it("creates the native leaderboard List schema", async () => {
+    const keys = ["standing", "player", "rank", "played", "won", "lost", "win_rate", "last_updated"];
+    const fetcher = vi.fn(async () => Response.json({
+      list_id: "F1",
+      list_metadata: { schema: keys.map((key) => ({ id: `Col-${key}`, key })) },
+      ok: true,
+    }));
+    const client = new HttpSlackClient("xoxb-secret", fetcher);
+    await expect(client.create()).resolves.toMatchObject({ listId: "F1" });
+    const body = requestBody(fetcher, 0);
+    expect(body).toMatchObject({ name: "Ċomba Leaderboard" });
+    expect(body.schema).toHaveLength(8);
+  });
+
+  it("replaces a leaderboard with bulk delete and one batched cell update", async () => {
+    const fetcher = vi.fn(async () => Response.json({ ok: true }));
+    const client = new HttpSlackClient("xoxb-secret", fetcher);
+    const definition = {
+      listId: "F1",
+      columns: { standing: "C1", player: "C2", rank: "C3", played: "C4", won: "C5", lost: "C6", winRate: "C7", lastUpdated: "C8" },
+    };
+    await client.deleteRows("F1", ["R1", "R2"]);
+    await client.writeSnapshot(definition, [{ gameWinRate: 75, gamesLost: 1, gamesPlayed: 4, gamesWon: 3, playerId: "U1", rank: 1, standing: "🥇 #1", updatedOn: "2026-08-30" }]);
+    expect(fetcher).toHaveBeenNthCalledWith(1, "https://slack.com/api/slackLists.items.deleteMultiple", expect.objectContaining({ body: expect.stringContaining('"ids":["R1","R2"]') }));
+    const update = requestBody(fetcher, 1);
+    expect(update.cells).toHaveLength(8);
+    expect(update.cells).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ column_id: "C3", number: [1] }),
+        expect.objectContaining({ column_id: "C7", number: [75] }),
+      ]),
+    );
+    expect(new Set(update.cells.map((cell: { row_id: string }) => cell.row_id)).size).toBe(1);
+    expect(update.cells.every((cell: { row_id_to_create: boolean }) => cell.row_id_to_create)).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("grants the channel read-only List access", async () => {
+    const fetcher = vi.fn(async () => Response.json({ ok: true }));
+    const client = new HttpSlackClient("xoxb-secret", fetcher);
+    await client.grantChannelReadAccess("F1", "C1");
+    expect(requestBody(fetcher, 0)).toEqual({
+      access_level: "read",
+      channel_ids: ["C1"],
+      list_id: "F1",
+    });
+  });
+
+  it("paginates every existing List row", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [{ id: "R1" }],
+          ok: true,
+          response_metadata: { next_cursor: "next" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ items: [{ id: "R2" }], ok: true }),
+      );
+    const client = new HttpSlackClient("xoxb-secret", fetcher);
+    await expect(client.listRowIds("F1")).resolves.toEqual(["R1", "R2"]);
+    expect(fetcher.mock.calls[1]![1]!.body).toContain('"cursor":"next"');
+  });
+
+  it("turns list_not_found into the application recreation signal", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ error: "list_not_found", ok: false }),
+    );
+    const client = new HttpSlackClient("xoxb-secret", fetcher);
+    await expect(client.listRowIds("missing")).rejects.toMatchObject({
+      name: "LeaderboardListNotFoundError",
+    });
+  });
+
+  it("keeps Slack capability errors actionable", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ error: "lists_disabled_user_team", ok: false }),
+    );
+    const client = new HttpSlackClient("xoxb-secret", fetcher);
+    await expect(client.create()).rejects.toMatchObject({
+      code: "lists_disabled_user_team",
+      message:
+        "Slack slackLists.create failed: lists_disabled_user_team",
+    });
+  });
+
   it("calls the Workers fetch global without binding it to the client", async () => {
     const runtimeFetch = vi.fn(function (this: unknown) {
       if (this instanceof HttpSlackClient) {
@@ -171,3 +262,8 @@ describe("HttpSlackClient", () => {
     );
   });
 });
+
+function requestBody(fetcher: { mock: { calls: unknown } }, index: number) {
+  const calls = fetcher.mock.calls as Array<[string, RequestInit]>;
+  return JSON.parse(calls[index]![1].body as string) as Record<string, any>;
+}
