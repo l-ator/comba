@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   deploy:
+    name: Migrate and deploy
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: prod

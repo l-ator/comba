@@ -2,11 +2,11 @@
 
 GitHub Actions is the canonical deployment path. Local Wrangler deployment commands remain available for diagnostics and emergency use.
 
-## Pipeline
+## Pipelines
 
-- Pull requests run `npm run check`.
-- A merge or push to `main` runs the checks, applies pending development D1 migrations, and deploys `env.dev`.
-- Production is deployed only through the manually triggered **Deploy production** workflow. It runs the checks, applies pending production D1 migrations, and deploys `env.prod`.
+- **Quality** runs `npm run check` on every pull request. It has no deployment environment or Cloudflare credentials.
+- **Deploy development** runs on every push or merge to `main`. It runs the checks, applies pending development D1 migrations, and deploys `env.dev`.
+- **Deploy production** is manually triggered from `main`. It runs the checks, applies pending production D1 migrations, and deploys `env.prod` behind the `prod` environment approval gate.
 - GitHub serializes deployments per environment so two migrations or deployments cannot run concurrently.
 
 D1 records applied migrations, so rerunning either deployment workflow is safe when no new migration exists. A failed migration stops the workflow before the Worker deployment.
