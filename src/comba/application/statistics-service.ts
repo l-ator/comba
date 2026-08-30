@@ -1,6 +1,7 @@
 import { inject, Lifecycle, scoped } from "tsyringe";
 
 import { TOKENS } from "@shared/di/tokens";
+import { GameOutcome } from "@comba/domain/statistics/model";
 import type {
   HeadToHeadStatistics,
   Leaderboard,
@@ -125,6 +126,31 @@ export class StatisticsService {
         totals.gamesPlayedTogether,
       ),
     };
+  }
+
+  async getRecentOutcomes(
+    workspaceId: string,
+    playerId: string,
+    limit = 5,
+  ): Promise<GameOutcome[]> {
+    const sessions = await this.repository.getRecentGames(
+      workspaceId,
+      playerId,
+      limit,
+    );
+    const outcomes: GameOutcome[] = [];
+    for (const session of [...sessions].reverse()) {
+      const team = session.teams.find((t) =>
+        t.players.some((p) => p.userId === playerId),
+      );
+      if (!team) continue;
+      const opponentId = team.id === "A" ? "B" : "A";
+      const wins = session.scores[team.id] ?? 0;
+      const losses = session.scores[opponentId] ?? 0;
+      for (let i = 0; i < wins; i++) outcomes.push(GameOutcome.WON);
+      for (let i = 0; i < losses; i++) outcomes.push(GameOutcome.LOST);
+    }
+    return outcomes.slice(-limit).reverse();
   }
 }
 

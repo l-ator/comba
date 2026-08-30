@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { SessionWithParticipants } from "@comba/application/models/session-view";
 import {
@@ -31,6 +31,20 @@ describe("renderOpenLobby", () => {
     expect(serialized).not.toContain(COMBA_INTERACTION_IDS.joinB2);
     expect(serialized).toContain('"style":"danger"');
     expect(serialized).toContain("Bench me");
+  });
+
+  it("keeps the lobby taunt stable when the same session is re-rendered", () => {
+    const random = vi
+      .spyOn(Math, "random")
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.99);
+
+    const first = renderOpenLobby(openLobby());
+    const second = renderOpenLobby(openLobby());
+
+    expect(JSON.stringify(second.blocks)).toBe(JSON.stringify(first.blocks));
+    expect(random).not.toHaveBeenCalled();
+    random.mockRestore();
   });
 });
 

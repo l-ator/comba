@@ -5,6 +5,7 @@ import {
   SlackApiError,
 } from "@comba/infrastructure/slack/http-slack-client";
 import type { SlackMessageView } from "@comba/presentation/slack/views/types";
+import { GameOutcome } from "@comba/domain/statistics/model";
 
 const message: SlackMessageView = { blocks: [], text: "⚽ Ċomba?" };
 
@@ -15,19 +16,19 @@ afterEach(() => {
 
 describe("HttpSlackClient", () => {
   it("creates the native leaderboard List schema", async () => {
-    const keys = ["standing", "player", "rank", "played", "won", "lost", "win_rate", "last_updated", "teammate", "nemesis", "victim"];
+    const keys = ["record", "player", "rank", "win_rate", "form", "teammate", "nemesis", "victim"];
     const fetcher = vi.fn(async () => Response.json({
       list_id: "F1",
       list_metadata: { schema: keys.map((key) => ({ id: `Col-${key}`, key })) },
       ok: true,
     }));
     const client = new HttpSlackClient("xoxb-secret", fetcher);
-    await expect(client.create("Ċomba Leaderboard")).resolves.toMatchObject({
+    await expect(client.create()).resolves.toMatchObject({
       listId: "F1",
     });
     const body = requestBody(fetcher, 0);
     expect(body).toMatchObject({ name: "Ċomba Leaderboard" });
-    expect(body.schema).toHaveLength(11);
+    expect(body.schema).toHaveLength(8);
   });
 
   it("rewrites a leaderboard with delete and one items.create per row", async () => {
@@ -35,12 +36,12 @@ describe("HttpSlackClient", () => {
     const client = new HttpSlackClient("xoxb-secret", fetcher);
     const definition = {
       listId: "F1",
-      columns: { standing: "C1", player: "C2", rank: "C3", played: "C4", won: "C5", lost: "C6", winRate: "C7", lastUpdated: "C8", teammate: "C9", nemesis: "C10", victim: "C11" },
+      columns: { record: "C1", player: "C2", rank: "C3", winRate: "C4", form: "C5", teammate: "C6", nemesis: "C7", victim: "C8" },
     };
     await client.deleteRows("F1", ["R1", "R2"]);
     await client.writeSnapshot(definition, [
-      { gameWinRate: 75, gamesLost: 1, gamesPlayed: 4, gamesWon: 3, playerId: "U1", rank: 1, standing: "🥇", teammate: "UT", nemesis: "UN", victim: "", updatedOn: "2026-08-30" },
-      { gameWinRate: 50, gamesLost: 2, gamesPlayed: 4, gamesWon: 2, playerId: "U2", rank: 2, standing: "🥈", teammate: "", nemesis: "", victim: "UV", updatedOn: "2026-08-30" },
+      { gameWinRate: 75, gamesLost: 1, gamesPlayed: 4, gamesWon: 3, playerId: "U1", rank: 1, recentOutcomes: [GameOutcome.WON, GameOutcome.WON, GameOutcome.LOST], relational: { bestTeammate: "UT", gamesPlayedTogether: 3, nemesis: "UN", nemesisCount: 2, victim: null, victimCount: 0 } },
+      { gameWinRate: 50, gamesLost: 2, gamesPlayed: 4, gamesWon: 2, playerId: "U2", rank: 2, recentOutcomes: [GameOutcome.LOST], relational: { bestTeammate: null, gamesPlayedTogether: 0, nemesis: null, nemesisCount: 0, victim: "UV", victimCount: 2 } },
     ]);
     expect(fetcher).toHaveBeenNthCalledWith(1, "https://slack.com/api/slackLists.items.deleteMultiple", expect.objectContaining({ body: expect.stringContaining('"ids":["R1","R2"]') }));
     const create1 = requestBody(fetcher, 1);
@@ -57,7 +58,7 @@ describe("HttpSlackClient", () => {
                 expect.objectContaining({
                   type: "rich_text_section",
                   elements: expect.arrayContaining([
-                    expect.objectContaining({ type: "text", text: "🥇" }),
+                    expect.objectContaining({ type: "text", text: "4 - 3 - 1 🥇" }),
                   ]),
                 }),
               ]),
@@ -66,13 +67,46 @@ describe("HttpSlackClient", () => {
         }),
         expect.objectContaining({ column_id: "C2", user: ["U1"] }),
         expect.objectContaining({ column_id: "C3", number: [1] }),
-        expect.objectContaining({ column_id: "C7", number: [75] }),
-        expect.objectContaining({ column_id: "C9", user: ["UT"] }),
-        expect.objectContaining({ column_id: "C10", user: ["UN"] }),
+        expect.objectContaining({
+          column_id: "C4",
+          rich_text: expect.arrayContaining([
+            expect.objectContaining({
+              type: "rich_text",
+              elements: expect.arrayContaining([
+                expect.objectContaining({
+                  type: "rich_text_section",
+                  elements: expect.arrayContaining([
+                    expect.objectContaining({ type: "text", text: "75%" }),
+                  ]),
+                }),
+              ]),
+            }),
+          ]),
+        }),
+        expect.objectContaining({
+          column_id: "C5",
+          rich_text: [
+            expect.objectContaining({
+              type: "rich_text",
+              elements: [
+                expect.objectContaining({
+                  type: "rich_text_section",
+                  elements: expect.arrayContaining([
+                    expect.objectContaining({ type: "emoji", name: "large_green_circle" }),
+                    expect.objectContaining({ type: "text", text: " " }),
+                    expect.objectContaining({ type: "emoji", name: "red_circle" }),
+                  ]),
+                }),
+              ],
+            }),
+          ],
+        }),
+        expect.objectContaining({ column_id: "C6", user: ["UT"] }),
+        expect.objectContaining({ column_id: "C7", user: ["UN"] }),
       ]),
     );
     expect(create1.initial_fields).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ column_id: "C11" })]),
+      expect.arrayContaining([expect.objectContaining({ column_id: "C8" })]),
     );
     expect(create2.initial_fields).toEqual(
       expect.arrayContaining([
@@ -81,7 +115,7 @@ describe("HttpSlackClient", () => {
           rich_text: expect.anything(),
         }),
         expect.objectContaining({ column_id: "C2", user: ["U2"] }),
-        expect.objectContaining({ column_id: "C11", user: ["UV"] }),
+        expect.objectContaining({ column_id: "C8", user: ["UV"] }),
       ]),
     );
     expect(fetcher).toHaveBeenCalledTimes(3);

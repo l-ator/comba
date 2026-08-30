@@ -99,7 +99,7 @@ export function renderOpenLobby(
           },
         ],
         has_header_divider: true,
-        subtitle: randomLobbyTaunt(),
+        subtitle: lobbyTaunt(session.id),
       }),
     ],
     text: `⚽ Ċomba? ${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining.`,
@@ -259,10 +259,13 @@ const LOBBY_TAUNTS = [
   "💩 Winners talk shit"
 ];
 
-function randomLobbyTaunt(): string {
-  return (
-    LOBBY_TAUNTS[Math.floor(Math.random() * LOBBY_TAUNTS.length)] ?? ""
-  );
+function lobbyTaunt(sessionId: string): string {
+  let hash = 0;
+  for (const character of sessionId) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+
+  return LOBBY_TAUNTS[hash % LOBBY_TAUNTS.length] ?? "";
 }
 
 function closesInLabel(expiresAt: string): string {

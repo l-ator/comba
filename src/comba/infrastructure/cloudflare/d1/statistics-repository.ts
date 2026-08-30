@@ -1,8 +1,10 @@
 import { inject, Lifecycle, scoped } from "tsyringe";
 
 import { TOKENS } from "@shared/di/tokens";
+import type { Team } from "@comba/domain/session/model";
 import type {
   BestTeammateRecord,
+  GameOutcomeRecord,
   HeadToHeadNeedleRecord,
   HeadToHeadRecord,
   LeaderboardRecord,
@@ -27,6 +29,14 @@ interface NeedleRow {
   count: number;
   opponentId: string;
   playerId: string;
+}
+
+interface RecentGameRow {
+  gameId: string;
+  completedAt: string;
+  scores: string;
+  won: number;
+  teams: string;
 }
 
 @scoped(Lifecycle.ContainerScoped)
@@ -162,6 +172,38 @@ export class D1StatisticsRepository implements StatisticsRepository {
         null,
       nemesis: nemeses.find((row) => row.playerId === playerId)?.needle ?? null,
       victim: victims.find((row) => row.playerId === playerId)?.needle ?? null,
+    }));
+  }
+
+  async getRecentGames(
+    workspaceId: string,
+    playerId: string,
+    limit: number,
+  ): Promise<GameOutcomeRecord[]> {
+    const result = await this.database
+      .prepare(
+        `SELECT g.id AS gameId,
+                g.completed_at AS completedAt,
+                g.scores_json AS scores,
+                g.teams_json AS teams,
+                CASE WHEN (p.team_id = 'A' AND json_extract(g.scores_json, '$.A') > json_extract(g.scores_json, '$.B'))
+                      OR (p.team_id = 'B' AND json_extract(g.scores_json, '$.B') > json_extract(g.scores_json, '$.A'))
+                     THEN 1 ELSE 0 END AS won
+         FROM game_participants p
+         JOIN games g ON g.id = p.game_id
+         WHERE p.workspace_id = ? AND p.user_id = ?
+         ORDER BY g.completed_at DESC
+         LIMIT ?`,
+      )
+      .bind(workspaceId, playerId, limit)
+      .all<RecentGameRow>();
+
+    return result.results.map((row) => ({
+      completedAt: row.completedAt,
+      gameId: row.gameId,
+      scores: JSON.parse(row.scores) as Record<string, number>,
+      teams: JSON.parse(row.teams) as Team[],
+      won: Boolean(row.won),
     }));
   }
 

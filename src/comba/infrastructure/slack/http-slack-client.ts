@@ -18,6 +18,7 @@ import type {
   LeaderboardListRow,
 } from "@comba/application/ports/leaderboard-list";
 import { LeaderboardListNotFoundError } from "@comba/application/ports/leaderboard-list";
+import { GameOutcome } from "@comba/domain/statistics/model";
 
 const slackMessageResponseSchema = z.object({
   channel: z.string().min(1),
@@ -115,24 +116,21 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
     });
   }
 
-  async create(name: string): Promise<LeaderboardListDefinition> {
+  async create(channelName?: string): Promise<LeaderboardListDefinition> {
     const keys: Array<
       [keyof LeaderboardListColumns, string, string, boolean?]
     > = [
-      ["standing", "standing", "Standing", true],
+      ["record", "record", "P - W - L", true],
       ["player", "player", "Player"],
       ["rank", "rank", "Rank"],
-      ["played", "played", "Played"],
-      ["won", "won", "Won"],
-      ["lost", "lost", "Lost"],
       ["winRate", "win_rate", "Win rate"],
-      ["lastUpdated", "last_updated", "Last updated"],
+      ["form", "form", "Form"],
       ["teammate", "teammate", "Best teammate"],
       ["nemesis", "nemesis", "Nemesis"],
       ["victim", "victim", "Victim"],
     ];
     const payload = await this.request("slackLists.create", {
-      name,
+      name: listName(channelName),
       schema: keys.map(([property, key, name, primary]) => ({
         key,
         name,
@@ -142,23 +140,18 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
           property === "nemesis" ||
           property === "victim"
             ? "user"
-            : property === "lastUpdated"
-              ? "date"
-              : property === "rank" ||
-                  property === "played" ||
-                  property === "won" ||
-                  property === "lost" ||
-                  property === "winRate"
-                ? "number"
-                : "text",
+            : property === "rank"
+              ? "number"
+              : "text",
         ...(primary ? { is_primary_column: true } : {}),
         ...(property === "player" ||
         property === "teammate" ||
         property === "nemesis" ||
         property === "victim"
           ? { options: { format: "single_entity" } }
-          : {}),
-        ...(property === "winRate" ? { options: { precision: 1 } } : {}),
+          : property === "rank"
+            ? { options: { precision: 0 } }
+            : {}),
       })),
     });
     const parsed = z
@@ -176,14 +169,11 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
     return {
       listId: parsed.list_id,
       columns: {
-        standing: requiredColumn(byKey, "standing"),
+        record: requiredColumn(byKey, "record"),
         player: requiredColumn(byKey, "player"),
         rank: requiredColumn(byKey, "rank"),
-        played: requiredColumn(byKey, "played"),
-        won: requiredColumn(byKey, "won"),
-        lost: requiredColumn(byKey, "lost"),
         winRate: requiredColumn(byKey, "win_rate"),
-        lastUpdated: requiredColumn(byKey, "last_updated"),
+        form: requiredColumn(byKey, "form"),
         teammate: requiredColumn(byKey, "teammate"),
         nemesis: requiredColumn(byKey, "nemesis"),
         victim: requiredColumn(byKey, "victim"),
@@ -247,24 +237,42 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
     for (const row of rows) {
       const fields = [
         {
-          column_id: definition.columns.standing,
-          rich_text: richText(row.standing),
+          column_id: definition.columns.record,
+          rich_text: richText(record(row, rows.length)),
         },
         { column_id: definition.columns.player, user: [row.playerId] },
         { column_id: definition.columns.rank, number: [row.rank] },
-        { column_id: definition.columns.played, number: [row.gamesPlayed] },
-        { column_id: definition.columns.won, number: [row.gamesWon] },
-        { column_id: definition.columns.lost, number: [row.gamesLost] },
-        { column_id: definition.columns.winRate, number: [row.gameWinRate] },
-        { column_id: definition.columns.lastUpdated, date: [row.updatedOn] },
-        ...(row.teammate
-          ? [{ column_id: definition.columns.teammate, user: [row.teammate] }]
+        {
+          column_id: definition.columns.winRate,
+          rich_text: richText(`${formatPercent(row.gameWinRate)}%`),
+        },
+        {
+          column_id: definition.columns.form,
+          rich_text: formRichText(row.recentOutcomes),
+        },
+        ...(row.relational?.bestTeammate
+          ? [
+              {
+                column_id: definition.columns.teammate,
+                user: [row.relational.bestTeammate],
+              },
+            ]
           : []),
-        ...(row.nemesis
-          ? [{ column_id: definition.columns.nemesis, user: [row.nemesis] }]
+        ...(row.relational?.nemesis
+          ? [
+              {
+                column_id: definition.columns.nemesis,
+                user: [row.relational.nemesis],
+              },
+            ]
           : []),
-        ...(row.victim
-          ? [{ column_id: definition.columns.victim, user: [row.victim] }]
+        ...(row.relational?.victim
+          ? [
+              {
+                column_id: definition.columns.victim,
+                user: [row.relational.victim],
+              },
+            ]
           : []),
       ];
       await this.requestOk("slackLists.items.create", {
@@ -347,3 +355,42 @@ function richText(text: string) {
   ];
 }
 
+function formatPercent(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function formRichText(outcomes: GameOutcome[]) {
+  const names = outcomes.map((outcome) =>
+    outcome === GameOutcome.WON ? "large_green_circle" : "red_circle",
+  );
+  const elements: Array<
+    | { name: string; type: "emoji" }
+    | { text: string; type: "text" }
+  > = [];
+  names.forEach((name, index) => {
+    if (index > 0) elements.push({ text: " ", type: "text" });
+    elements.push({ name, type: "emoji" });
+  });
+  return [
+    {
+      type: "rich_text",
+      elements: [
+        { type: "rich_text_section", elements },
+      ],
+    },
+  ];
+}
+
+function listName(channelName?: string): string {
+  return channelName
+    ? `Ċomba Leaderboard · #${channelName}`
+    : "Ċomba Leaderboard";
+}
+
+function record(row: LeaderboardListRow, playerCount: number): string {
+  const medal = ["🥇", "🥈", "🥉"][row.rank - 1];
+  const emoji =
+    medal ?? (playerCount > 1 && row.rank === playerCount ? "💩" : "");
+  return `${row.gamesPlayed} - ${row.gamesWon} - ${row.gamesLost}${emoji ? ` ${emoji}` : ""}`;
+}

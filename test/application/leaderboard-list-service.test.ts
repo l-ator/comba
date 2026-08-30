@@ -2,19 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 
 import { LeaderboardListService } from "@comba/application/leaderboard-list-service";
 import { LeaderboardListNotFoundError } from "@comba/application/ports/leaderboard-list";
+import { GameOutcome } from "@comba/domain/statistics/model";
 
 const columns = {
-  lastUpdated: "last",
-  lost: "lost",
+  form: "form",
   nemesis: "nemesis",
-  played: "played",
   player: "player",
   rank: "rank",
-  standing: "standing",
+  record: "record",
   teammate: "teammate",
   victim: "victim",
   winRate: "rate",
-  won: "won",
 };
 
 describe("LeaderboardListService", () => {
@@ -26,7 +24,17 @@ describe("LeaderboardListService", () => {
     expect(lists.grantChannelReadAccess).toHaveBeenCalledWith("F1", "C1");
     expect(lists.writeSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ listId: "F1" }),
-      [expect.objectContaining({ playerId: "U1", rank: 1, standing: "🥇" })],
+      [
+        expect.objectContaining({
+          playerId: "U1",
+          rank: 1,
+          recentOutcomes: [
+            GameOutcome.WON,
+            GameOutcome.WON,
+            GameOutcome.LOST,
+          ],
+        }),
+      ],
     );
     expect(repository.markSynced).toHaveBeenCalled();
     expect(repository.save).toHaveBeenCalledWith(
@@ -116,6 +124,11 @@ function setup(
       mostGames: null,
       players,
     })),
+    getRecentOutcomes: vi.fn(async () => [
+      GameOutcome.WON,
+      GameOutcome.WON,
+      GameOutcome.LOST,
+    ]),
   };
   const lists = {
     create: vi.fn(async () => ({ columns, listId: "F1" })),

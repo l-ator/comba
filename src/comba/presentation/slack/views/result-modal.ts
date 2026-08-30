@@ -13,14 +13,25 @@ export function renderResultModal(
 ): SlackModalView {
   return {
     blocks: [
+      {
+        text: {
+          text: [
+            "*How many games did each team win?*",
+            teamSummary(state, "A", "⚪"),
+            teamSummary(state, "B", "🔴"),
+          ].join("\n"),
+          type: "mrkdwn",
+        },
+        type: "section",
+      },
       scoreInput(
         RESULT_MODAL.teamABlockId,
-        "Team A wins",
+        "Team A — games won",
         state.result?.teamAWins,
       ),
       scoreInput(
         RESULT_MODAL.teamBBlockId,
-        "Team B wins",
+        "Team B — games won",
         state.result?.teamBWins,
       ),
     ],
@@ -31,9 +42,22 @@ export function renderResultModal(
       sessionId: state.session.id,
     }),
     submit: plainText(state.result ? "Edit result" : "Record result"),
-    title: plainText("Ċomba result"),
+    title: plainText("Record games won"),
     type: "modal",
   };
+}
+
+function teamSummary(
+  state: SessionWithParticipants,
+  team: "A" | "B",
+  symbol: string,
+): string {
+  const players = state.participants
+    .filter((participant) => participant.team === team)
+    .sort((left, right) => left.position - right.position)
+    .map((participant) => `<@${participant.userId}>`)
+    .join(" + ");
+  return `${symbol} *Team ${team}* · ${players}`;
 }
 
 function scoreInput(

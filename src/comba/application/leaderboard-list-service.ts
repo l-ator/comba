@@ -46,7 +46,7 @@ export class LeaderboardListService {
       }
     }
     if (!stored) {
-      const definition = await this.lists.create(listName(channelName));
+      const definition = await this.lists.create(channelName);
       stored = {
         ...definition,
         channelId,
@@ -61,15 +61,17 @@ export class LeaderboardListService {
 
     const leaderboard = await this.statistics.getLeaderboard(workspaceId);
     const syncedAt = this.now().toISOString();
-    const rows: LeaderboardListRow[] = leaderboard.players.map(
-      (player, index) => ({
-        ...player,
-        rank: index + 1,
-        standing: standing(index + 1, leaderboard.players.length),
-        teammate: player.relational?.bestTeammate ?? "",
-        nemesis: player.relational?.nemesis ?? "",
-        victim: player.relational?.victim ?? "",
-        updatedOn: syncedAt.slice(0, 10),
+    const rows: LeaderboardListRow[] = await Promise.all(
+      leaderboard.players.map(async (player, index) => {
+        const recentOutcomes = await this.statistics.getRecentOutcomes(
+          workspaceId,
+          player.playerId,
+        );
+        return {
+          ...player,
+          rank: index + 1,
+          recentOutcomes,
+        };
       }),
     );
     if (rowIds.length) await this.lists.deleteRows(stored.listId, rowIds);
@@ -84,17 +86,4 @@ export class LeaderboardListService {
       configured.map((item) => this.sync(item.workspaceId, item.channelId)),
     );
   }
-}
-
-function listName(channelName?: string): string {
-  return channelName
-    ? `Ċomba Leaderboard · #${channelName}`
-    : "Ċomba Leaderboard";
-}
-
-function standing(rank: number, playerCount: number): string {
-  const medal = ["🥇", "🥈", "🥉"][rank - 1];
-  if (medal) return medal;
-  if (playerCount > 1 && rank === playerCount) return "💩";
-  return `#${rank}`;
 }
