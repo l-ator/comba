@@ -32,6 +32,7 @@ export class LeaderboardListService {
   async sync(
     workspaceId: string,
     channelId: string,
+    channelName?: string,
   ): Promise<LeaderboardListSyncResult> {
     let stored = await this.repository.find(workspaceId, channelId);
     let created = false;
@@ -45,7 +46,7 @@ export class LeaderboardListService {
       }
     }
     if (!stored) {
-      const definition = await this.lists.create();
+      const definition = await this.lists.create(listName(channelName));
       stored = {
         ...definition,
         channelId,
@@ -64,7 +65,10 @@ export class LeaderboardListService {
       (player, index) => ({
         ...player,
         rank: index + 1,
-        standing: standing(index + 1),
+        standing: standing(index + 1, leaderboard.players.length),
+        teammate: player.relational?.bestTeammate ?? "",
+        nemesis: player.relational?.nemesis ?? "",
+        victim: player.relational?.victim ?? "",
         updatedOn: syncedAt.slice(0, 10),
       }),
     );
@@ -82,6 +86,15 @@ export class LeaderboardListService {
   }
 }
 
-function standing(rank: number): string {
-  return ["🥇 #1", "🥈 #2", "🥉 #3"][rank - 1] ?? `#${rank}`;
+function listName(channelName?: string): string {
+  return channelName
+    ? `Ċomba Leaderboard · #${channelName}`
+    : "Ċomba Leaderboard";
+}
+
+function standing(rank: number, playerCount: number): string {
+  const medal = ["🥇", "🥈", "🥉"][rank - 1];
+  if (medal) return medal;
+  if (playerCount > 1 && rank === playerCount) return "💩";
+  return `#${rank}`;
 }

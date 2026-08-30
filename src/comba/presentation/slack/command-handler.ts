@@ -10,7 +10,7 @@ import { errorDetails } from "@shared/observability/error-details";
 import type {
   HeadToHeadStatistics,
   Leaderboard,
-  PlayerStatistics,
+  PlayerStats,
   TeammateStatistics,
 } from "@comba/domain/statistics/model";
 import { StatisticsService } from "@comba/application/statistics-service";
@@ -42,6 +42,7 @@ export class CombaCommandHandler {
       const result = await this.leaderboardLists.sync(
         command.team_id,
         command.channel_id,
+        command.channel_name,
       );
       return ephemeral(
         `${result.created ? "Created" : "Reused"} Ċomba Leaderboard ${result.listId}; wrote ${result.rows} rows at ${result.syncedAt}. Add/select the List in this channel's tabs if Slack does not show it automatically.`,
@@ -221,12 +222,30 @@ function slackMentionId(value: string): string | null {
   return /^<@([A-Z0-9]+)(?:\|[^>]+)?>$/.exec(value)?.[1] ?? null;
 }
 
-function renderPlayerStats(playerId: string, stats: PlayerStatistics): string {
-  return [
+function renderPlayerStats(
+  playerId: string,
+  stats: PlayerStats,
+): string {
+  const lines = [
     `⚽ *<@${playerId}>*`,
     `Games: *${stats.gamesPlayed}* · Won: *${stats.gamesWon}* · Lost: *${stats.gamesLost}*`,
     `Game win rate: *${stats.gameWinRate.toFixed(1)}%*`,
-  ].join("\n");
+  ];
+  const rel = stats.relational;
+  if (rel) {
+    if (rel.bestTeammate) {
+      lines.push(
+        `🤝 Best teammate: <@${rel.bestTeammate}> (${rel.gamesPlayedTogether} games together)`,
+      );
+    }
+    if (rel.nemesis) {
+      lines.push(`😈 Nemesis: <@${rel.nemesis}> (lost ${rel.nemesisCount}×)`);
+    }
+    if (rel.victim) {
+      lines.push(`🎯 Victim: <@${rel.victim}> (beaten ${rel.victimCount}×)`);
+    }
+  }
+  return lines.join("\n");
 }
 
 function renderLeaderboard(leaderboard: Leaderboard): string {

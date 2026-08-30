@@ -67,10 +67,13 @@ function stored(
     columns: {
       lastUpdated: "last",
       lost: "lost",
+      nemesis: "nemesis",
       played: "played",
       player: "player",
       rank: "rank",
       standing: "standing",
+      teammate: "teammate",
+      victim: "victim",
       winRate: "rate",
       won: "won",
     },

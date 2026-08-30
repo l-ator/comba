@@ -15,40 +15,76 @@ afterEach(() => {
 
 describe("HttpSlackClient", () => {
   it("creates the native leaderboard List schema", async () => {
-    const keys = ["standing", "player", "rank", "played", "won", "lost", "win_rate", "last_updated"];
+    const keys = ["standing", "player", "rank", "played", "won", "lost", "win_rate", "last_updated", "teammate", "nemesis", "victim"];
     const fetcher = vi.fn(async () => Response.json({
       list_id: "F1",
       list_metadata: { schema: keys.map((key) => ({ id: `Col-${key}`, key })) },
       ok: true,
     }));
     const client = new HttpSlackClient("xoxb-secret", fetcher);
-    await expect(client.create()).resolves.toMatchObject({ listId: "F1" });
+    await expect(client.create("Ċomba Leaderboard")).resolves.toMatchObject({
+      listId: "F1",
+    });
     const body = requestBody(fetcher, 0);
     expect(body).toMatchObject({ name: "Ċomba Leaderboard" });
-    expect(body.schema).toHaveLength(8);
+    expect(body.schema).toHaveLength(11);
   });
 
-  it("replaces a leaderboard with bulk delete and one batched cell update", async () => {
+  it("rewrites a leaderboard with delete and one items.create per row", async () => {
     const fetcher = vi.fn(async () => Response.json({ ok: true }));
     const client = new HttpSlackClient("xoxb-secret", fetcher);
     const definition = {
       listId: "F1",
-      columns: { standing: "C1", player: "C2", rank: "C3", played: "C4", won: "C5", lost: "C6", winRate: "C7", lastUpdated: "C8" },
+      columns: { standing: "C1", player: "C2", rank: "C3", played: "C4", won: "C5", lost: "C6", winRate: "C7", lastUpdated: "C8", teammate: "C9", nemesis: "C10", victim: "C11" },
     };
     await client.deleteRows("F1", ["R1", "R2"]);
-    await client.writeSnapshot(definition, [{ gameWinRate: 75, gamesLost: 1, gamesPlayed: 4, gamesWon: 3, playerId: "U1", rank: 1, standing: "🥇 #1", updatedOn: "2026-08-30" }]);
+    await client.writeSnapshot(definition, [
+      { gameWinRate: 75, gamesLost: 1, gamesPlayed: 4, gamesWon: 3, playerId: "U1", rank: 1, standing: "🥇", teammate: "UT", nemesis: "UN", victim: "", updatedOn: "2026-08-30" },
+      { gameWinRate: 50, gamesLost: 2, gamesPlayed: 4, gamesWon: 2, playerId: "U2", rank: 2, standing: "🥈", teammate: "", nemesis: "", victim: "UV", updatedOn: "2026-08-30" },
+    ]);
     expect(fetcher).toHaveBeenNthCalledWith(1, "https://slack.com/api/slackLists.items.deleteMultiple", expect.objectContaining({ body: expect.stringContaining('"ids":["R1","R2"]') }));
-    const update = requestBody(fetcher, 1);
-    expect(update.cells).toHaveLength(8);
-    expect(update.cells).toEqual(
+    const create1 = requestBody(fetcher, 1);
+    const create2 = requestBody(fetcher, 2);
+    expect(create1).toMatchObject({ list_id: "F1" });
+    expect(create1.initial_fields).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          column_id: "C1",
+          rich_text: expect.arrayContaining([
+            expect.objectContaining({
+              type: "rich_text",
+              elements: expect.arrayContaining([
+                expect.objectContaining({
+                  type: "rich_text_section",
+                  elements: expect.arrayContaining([
+                    expect.objectContaining({ type: "text", text: "🥇" }),
+                  ]),
+                }),
+              ]),
+            }),
+          ]),
+        }),
+        expect.objectContaining({ column_id: "C2", user: ["U1"] }),
         expect.objectContaining({ column_id: "C3", number: [1] }),
         expect.objectContaining({ column_id: "C7", number: [75] }),
+        expect.objectContaining({ column_id: "C9", user: ["UT"] }),
+        expect.objectContaining({ column_id: "C10", user: ["UN"] }),
       ]),
     );
-    expect(new Set(update.cells.map((cell: { row_id: string }) => cell.row_id)).size).toBe(1);
-    expect(update.cells.every((cell: { row_id_to_create: boolean }) => cell.row_id_to_create)).toBe(true);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(create1.initial_fields).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ column_id: "C11" })]),
+    );
+    expect(create2.initial_fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          column_id: "C1",
+          rich_text: expect.anything(),
+        }),
+        expect.objectContaining({ column_id: "C2", user: ["U2"] }),
+        expect.objectContaining({ column_id: "C11", user: ["UV"] }),
+      ]),
+    );
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it("grants the channel read-only List access", async () => {
@@ -95,7 +131,7 @@ describe("HttpSlackClient", () => {
       Response.json({ error: "lists_disabled_user_team", ok: false }),
     );
     const client = new HttpSlackClient("xoxb-secret", fetcher);
-    await expect(client.create()).rejects.toMatchObject({
+    await expect(client.create("Ċomba Leaderboard")).rejects.toMatchObject({
       code: "lists_disabled_user_team",
       message:
         "Slack slackLists.create failed: lists_disabled_user_team",

@@ -6,10 +6,13 @@ import { LeaderboardListNotFoundError } from "@comba/application/ports/leaderboa
 const columns = {
   lastUpdated: "last",
   lost: "lost",
+  nemesis: "nemesis",
   played: "played",
   player: "player",
   rank: "rank",
   standing: "standing",
+  teammate: "teammate",
+  victim: "victim",
   winRate: "rate",
   won: "won",
 };
@@ -23,7 +26,7 @@ describe("LeaderboardListService", () => {
     expect(lists.grantChannelReadAccess).toHaveBeenCalledWith("F1", "C1");
     expect(lists.writeSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ listId: "F1" }),
-      [expect.objectContaining({ playerId: "U1", rank: 1, standing: "🥇 #1" })],
+      [expect.objectContaining({ playerId: "U1", rank: 1, standing: "🥇" })],
     );
     expect(repository.markSynced).toHaveBeenCalled();
     expect(repository.save).toHaveBeenCalledWith(

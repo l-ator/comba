@@ -9,6 +9,9 @@ export interface LeaderboardListColumns {
   lost: string;
   winRate: string;
   lastUpdated: string;
+  teammate: string;
+  nemesis: string;
+  victim: string;
 }
 
 export interface LeaderboardListDefinition {
@@ -17,9 +20,12 @@ export interface LeaderboardListDefinition {
 }
 
 export interface LeaderboardListRow extends LeaderboardEntry {
+  nemesis: string;
   rank: number;
   standing: string;
+  teammate: string;
   updatedOn: string;
+  victim: string;
 }
 
 export class LeaderboardListNotFoundError extends Error {
@@ -30,7 +36,7 @@ export class LeaderboardListNotFoundError extends Error {
 }
 
 export interface LeaderboardListPort {
-  create(): Promise<LeaderboardListDefinition>;
+  create(name: string): Promise<LeaderboardListDefinition>;
   deleteRows(listId: string, rowIds: string[]): Promise<void>;
   grantChannelReadAccess(listId: string, channelId: string): Promise<void>;
   listRowIds(listId: string): Promise<string[]>;

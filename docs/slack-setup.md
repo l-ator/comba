@@ -33,11 +33,11 @@ Deploy once to obtain the public Worker URL:
 npm run deploy:dev
 ```
 
-Replace both `REPLACE_WITH_WORKER_URL` placeholders in `../resources/slack/manifest.yaml` with that hostname.
+Replace both `REPLACE_WITH_WORKER_URL` placeholders in `../resources/slack/manifest-dev.yaml` with that hostname.
 
 ## 3. Personal Slack app
 
-At Slack's app management page, create an app from `../resources/slack/manifest.yaml` in the personal test workspace.
+At Slack's app management page, create an app from `../resources/slack/manifest-dev.yaml` in the personal test workspace.
 
 The manifest configures:
 

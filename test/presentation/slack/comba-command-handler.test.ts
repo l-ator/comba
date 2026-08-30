@@ -27,7 +27,11 @@ describe("CombaCommandHandler", () => {
       new Set(["U-MARIO"]),
     );
     const response = await handler.handle(command({ text: "admin list sync" }));
-    expect(leaderboardLists.sync).toHaveBeenCalledWith("T-PERSONAL", "C-COMBA");
+    expect(leaderboardLists.sync).toHaveBeenCalledWith(
+      "T-PERSONAL",
+      "C-COMBA",
+      "comba-testing",
+    );
     await expect(response.json()).resolves.toMatchObject({
       text: expect.stringContaining("wrote 4 rows"),
     });
@@ -73,6 +77,9 @@ describe("CombaCommandHandler", () => {
     const body = (await response.json()) as { text: string };
     expect(body.text).toContain("<@U-MARIO>");
     expect(body.text).toContain("57.1%");
+    expect(body.text).toContain("Best teammate: <@U-ALICE> (4 games together)");
+    expect(body.text).toContain("Nemesis: <@U-BOB> (lost 2×)");
+    expect(body.text).toContain("Victim: <@U-CHARLIE> (beaten 3×)");
     expect(statisticsService.getPlayerStats).toHaveBeenCalledWith(
       "T-PERSONAL",
       "U-MARIO",
@@ -326,6 +333,14 @@ function setup() {
       gamesPlayed: 7,
       gamesWon: 4,
       gameWinRate: 400 / 7,
+      relational: {
+        bestTeammate: "U-ALICE",
+        gamesPlayedTogether: 4,
+        nemesis: "U-BOB",
+        nemesisCount: 2,
+        victim: "U-CHARLIE",
+        victimCount: 3,
+      },
     })),
     getTeammateStats: vi.fn(async () => ({
       gamesLostTogether: 3,

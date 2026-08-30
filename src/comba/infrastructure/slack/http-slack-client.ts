@@ -115,7 +115,7 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
     });
   }
 
-  async create(): Promise<LeaderboardListDefinition> {
+  async create(name: string): Promise<LeaderboardListDefinition> {
     const keys: Array<
       [keyof LeaderboardListColumns, string, string, boolean?]
     > = [
@@ -127,22 +127,35 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
       ["lost", "lost", "Lost"],
       ["winRate", "win_rate", "Win rate"],
       ["lastUpdated", "last_updated", "Last updated"],
+      ["teammate", "teammate", "Best teammate"],
+      ["nemesis", "nemesis", "Nemesis"],
+      ["victim", "victim", "Victim"],
     ];
     const payload = await this.request("slackLists.create", {
-      name: "Ċomba Leaderboard",
+      name,
       schema: keys.map(([property, key, name, primary]) => ({
         key,
         name,
         type:
-          property === "standing"
-            ? "text"
-            : property === "player"
-              ? "user"
-              : property === "lastUpdated"
-                ? "date"
-                : "number",
+          property === "player" ||
+          property === "teammate" ||
+          property === "nemesis" ||
+          property === "victim"
+            ? "user"
+            : property === "lastUpdated"
+              ? "date"
+              : property === "rank" ||
+                  property === "played" ||
+                  property === "won" ||
+                  property === "lost" ||
+                  property === "winRate"
+                ? "number"
+                : "text",
         ...(primary ? { is_primary_column: true } : {}),
-        ...(property === "player"
+        ...(property === "player" ||
+        property === "teammate" ||
+        property === "nemesis" ||
+        property === "victim"
           ? { options: { format: "single_entity" } }
           : {}),
         ...(property === "winRate" ? { options: { precision: 1 } } : {}),
@@ -171,6 +184,9 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
         lost: requiredColumn(byKey, "lost"),
         winRate: requiredColumn(byKey, "win_rate"),
         lastUpdated: requiredColumn(byKey, "last_updated"),
+        teammate: requiredColumn(byKey, "teammate"),
+        nemesis: requiredColumn(byKey, "nemesis"),
+        victim: requiredColumn(byKey, "victim"),
       },
     };
   }
@@ -228,43 +244,34 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
     definition: LeaderboardListDefinition,
     rows: LeaderboardListRow[],
   ): Promise<void> {
-    const cells = rows.flatMap((row, index) => {
-      const base = { row_id: newRowId(index), row_id_to_create: true };
-      return [
+    for (const row of rows) {
+      const fields = [
         {
-          ...base,
           column_id: definition.columns.standing,
           rich_text: richText(row.standing),
         },
-        { ...base, column_id: definition.columns.player, user: [row.playerId] },
-        { ...base, column_id: definition.columns.rank, number: [row.rank] },
-        {
-          ...base,
-          column_id: definition.columns.played,
-          number: [row.gamesPlayed],
-        },
-        { ...base, column_id: definition.columns.won, number: [row.gamesWon] },
-        {
-          ...base,
-          column_id: definition.columns.lost,
-          number: [row.gamesLost],
-        },
-        {
-          ...base,
-          column_id: definition.columns.winRate,
-          number: [row.gameWinRate],
-        },
-        {
-          ...base,
-          column_id: definition.columns.lastUpdated,
-          date: [row.updatedOn],
-        },
+        { column_id: definition.columns.player, user: [row.playerId] },
+        { column_id: definition.columns.rank, number: [row.rank] },
+        { column_id: definition.columns.played, number: [row.gamesPlayed] },
+        { column_id: definition.columns.won, number: [row.gamesWon] },
+        { column_id: definition.columns.lost, number: [row.gamesLost] },
+        { column_id: definition.columns.winRate, number: [row.gameWinRate] },
+        { column_id: definition.columns.lastUpdated, date: [row.updatedOn] },
+        ...(row.teammate
+          ? [{ column_id: definition.columns.teammate, user: [row.teammate] }]
+          : []),
+        ...(row.nemesis
+          ? [{ column_id: definition.columns.nemesis, user: [row.nemesis] }]
+          : []),
+        ...(row.victim
+          ? [{ column_id: definition.columns.victim, user: [row.victim] }]
+          : []),
       ];
-    });
-    await this.requestOk("slackLists.items.update", {
-      cells,
-      list_id: definition.listId,
-    });
+      await this.requestOk("slackLists.items.create", {
+        list_id: definition.listId,
+        initial_fields: fields,
+      });
+    }
   }
 
   private async call(
@@ -340,7 +347,3 @@ function richText(text: string) {
   ];
 }
 
-function newRowId(index: number): string {
-  const random = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
-  return `Rec${random}${index.toString(36).padStart(3, "0")}`.toUpperCase();
-}
