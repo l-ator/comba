@@ -5,6 +5,7 @@ import type {
   TeamPosition,
 } from "@comba/application/models/session-view";
 import type { SlackMessageView } from "./types";
+import { cardContainer } from "./cards";
 
 export const COMBA_INTERACTION_IDS = {
   bench: "comba.bench",
@@ -73,31 +74,34 @@ export function renderOpenLobby(
 
   return {
     blocks: [
-      { text: plainText("⚽ Ċomba?"), type: "header" },
-      ...teamBlocks("⚪", "TEAM A", "A", participants, session.id),
-      ...teamBlocks("🔴", "TEAM B", "B", participants, session.id),
-      {
-        block_id: "comba.lobby.bench",
-        elements: [
-          button(
-            "Bench me",
-            COMBA_INTERACTION_IDS.bench,
-            session.id,
-            "primary",
-          ),
+      cardContainer("Ċomba?", {
+        child_blocks: [
+          ...teamBlocks("⚪", "TEAM A", "A", participants, session.id),
+          ...teamBlocks("🔴", "TEAM B", "B", participants, session.id),
+          {
+            block_id: "comba.lobby.bench",
+            elements: [
+              button(
+                "Bench me",
+                COMBA_INTERACTION_IDS.bench,
+                session.id,
+                "primary",
+              ),
+            ],
+            type: "actions",
+          },
+          {
+            elements: [
+              markdown(
+                `${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining · closes <t:${expiresAt}:R> · created by <@${session.creatorUserId}>`,
+              ),
+            ],
+            type: "context",
+          },
         ],
-        type: "actions",
-      },
-      { type: "divider" },
-      {
-        elements: [
-          markdown(
-            `${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining · closes <t:${expiresAt}:R>`,
-          ),
-          markdown(`Created by <@${session.creatorUserId}>`),
-        ],
-        type: "context",
-      },
+        has_header_divider: true,
+        subtitle: `⚽ ${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining`,
+      }),
     ],
     text: `⚽ Ċomba? ${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining.`,
   };
@@ -147,34 +151,40 @@ function joinActionId(team: Team, position: TeamPosition): string {
 function renderReadyLobby(state: SessionWithParticipants): SlackMessageView {
   return {
     blocks: [
-      { text: plainText("🔥 ĊOMBA IS ON"), type: "header" },
-      ...teamBlocks("⚪", "TEAM A", "A", state.participants, state.session.id),
-      ...teamBlocks("🔴", "TEAM B", "B", state.participants, state.session.id),
-      {
-        block_id: "comba.result.actions",
-        elements: [
-          button(
-            "Record result",
-            COMBA_INTERACTION_IDS.recordResult,
-            state.session.id,
-            "primary",
-          ),
-          button(
-            "Bench me",
-            COMBA_INTERACTION_IDS.bench,
-            state.session.id,
-            "primary",
-          ),
+      cardContainer("Ċomba is on", {
+        child_blocks: [
+          ...teamBlocks("⚪", "TEAM A", "A", state.participants, state.session.id),
+          ...teamBlocks("🔴", "TEAM B", "B", state.participants, state.session.id),
+          {
+            block_id: "comba.result.actions",
+            elements: [
+              button(
+                "Record result",
+                COMBA_INTERACTION_IDS.recordResult,
+                state.session.id,
+                "primary",
+              ),
+              button(
+                "Bench me",
+                COMBA_INTERACTION_IDS.bench,
+                state.session.id,
+                "primary",
+              ),
+            ],
+            type: "actions",
+          },
+          {
+            elements: [
+              markdown(
+                `Full lobby · hit *Record result* when the match is done`,
+              ),
+            ],
+            type: "context",
+          },
         ],
-        type: "actions",
-      },
-      { type: "divider" },
-      {
-        elements: [
-          markdown(`Full lobby · hit *Record result* when the match is done`),
-        ],
-        type: "context",
-      },
+        has_header_divider: true,
+        subtitle: `🔥 Full lobby ${mentions(state.participants, "A")} vs ${mentions(state.participants, "B")}`,
+      }),
     ],
     text: `🔥 Ċomba is on: ${mentions(state.participants, "A")} vs ${mentions(state.participants, "B")}`,
   };
@@ -190,44 +200,52 @@ function renderCompletedSession(
   const { result } = state;
   return {
     blocks: [
-      { text: plainText("🏁 FINAL RESULT"), type: "header" },
-      {
-        text: markdown(
-          `${mentions(state.participants, "A")}  *${result.teamAWins}*\n${mentions(state.participants, "B")}  *${result.teamBWins}*`,
-        ),
-        type: "section",
-      },
-      {
-        block_id: "comba.result.actions",
-        elements: [
-          button(
-            "Correct result",
-            COMBA_INTERACTION_IDS.recordResult,
-            state.session.id,
-            "primary",
-          ),
+      cardContainer("Final result", {
+        child_blocks: [
+          {
+            text: markdown(
+              `${mentions(state.participants, "A")}  *${result.teamAWins}*\n${mentions(state.participants, "B")}  *${result.teamBWins}*`,
+            ),
+            type: "section",
+          },
+          {
+            block_id: "comba.result.actions",
+            elements: [
+              button(
+                "Correct result",
+                COMBA_INTERACTION_IDS.recordResult,
+                state.session.id,
+                "primary",
+              ),
+            ],
+            type: "actions",
+          },
+          {
+            elements: [
+              markdown(
+                `${mentions(state.participants, "A")}  *${result.teamAWins}*   ·   *${result.teamBWins}*  ${mentions(state.participants, "B")}`,
+              ),
+            ],
+            type: "context",
+          },
         ],
-        type: "actions",
-      },
-      { type: "divider" },
-      {
-        elements: [
-          markdown(
-            `${mentions(state.participants, "A")}  *${result.teamAWins}*   ·   *${result.teamBWins}*  ${mentions(state.participants, "B")}`,
-          ),
-        ],
-        type: "context",
-      },
+        subtitle: `🏁 ${mentions(state.participants, "A")} *${result.teamAWins}* – *${result.teamBWins}* ${mentions(state.participants, "B")}`,
+      }),
     ],
     text: `🏁 Final result: ${mentions(state.participants, "A")} ${result.teamAWins}–${result.teamBWins} ${mentions(state.participants, "B")}`,
   };
 }
 
 function terminalView(title: string, detail: string): SlackMessageView {
+  const emoji = title.match(/^(\p{Extended_Pictographic}\s*)/u)?.[1] ?? "";
+  const plain = title.replace(/^\p{Extended_Pictographic}\s*/u, "");
   return {
     blocks: [
-      { text: plainText(title), type: "header" },
-      { text: markdown(detail), type: "section" },
+      cardContainer(plain, {
+        child_blocks: [
+          { text: markdown(`${emoji}${detail}`), type: "section" },
+        ],
+      }),
     ],
     text: `${title}. ${detail}`,
   };

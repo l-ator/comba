@@ -1,10 +1,33 @@
-import type { SlackBlock, SlackMessageView } from "./types";
+import type {
+  SlackBlock,
+  SlackContainerBlock,
+  SlackMessageView,
+} from "./types";
 
 export function cardView(
   blocks: SlackBlock[],
   text: string,
 ): SlackMessageView {
   return { blocks, text };
+}
+
+export function cardContainer(
+  title: string,
+  options: {
+    child_blocks: SlackBlock[];
+    has_header_divider?: boolean;
+    subtitle?: string;
+  },
+): SlackContainerBlock {
+  return {
+    child_blocks: options.child_blocks,
+    ...(options.has_header_divider
+      ? { has_header_divider: options.has_header_divider }
+      : {}),
+    ...(options.subtitle ? { subtitle: { text: options.subtitle, type: "mrkdwn" } } : {}),
+    title: { emoji: true, text: title, type: "plain_text" },
+    type: "container",
+  };
 }
 
 export function cardHeader(emoji: string, text: string): SlackBlock {
