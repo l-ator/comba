@@ -6,61 +6,61 @@
   "migrations": [
     {
       "new_sqlite_classes": ["SessionRoom"],
-      "tag": "v1",
-    },
+      "tag": "v1"
+    }
   ],
   "env": {
     "dev": {
       "name": "comba-dev",
       "durable_objects": {
-        "bindings": [{ "class_name": "SessionRoom", "name": "SESSION_ROOMS" }],
+        "bindings": [{ "class_name": "SessionRoom", "name": "SESSION_ROOMS" }]
       },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "comba-dev",
           "database_id": "d64266ac-d99a-4014-8a0a-ce41aff0e0de",
-          "migrations_dir": "resources/migrations",
-        },
+          "migrations_dir": "resources/migrations"
+        }
       ],
       "kv_namespaces": [
         {
           "binding": "LEADERBOARD_LIST",
-          "id": "REPLACE_WITH_DEV_LEADERBOARD_LIST_ID",
-        },
+          "id": "62ccb3f989ea40cc85c7211db767e691"
+        }
       ],
       "vars": {
         "APP_ENV": "development",
         "COMBA_CHANNEL_ID": "C0BTRCY31RA",
-        "COMBA_ADMIN_USER_IDS": "REPLACE_WITH_DEV_ADMIN_USER_IDS",
+        "COMBA_ADMIN_USER_IDS": "U0BT5BA62S3"
       },
-      "triggers": { "crons": ["0 * * * *"] },
+      "triggers": { "crons": ["0 * * * *"] }
     },
     "prod": {
       "name": "comba",
       "durable_objects": {
-        "bindings": [{ "class_name": "SessionRoom", "name": "SESSION_ROOMS" }],
+        "bindings": [{ "class_name": "SessionRoom", "name": "SESSION_ROOMS" }]
       },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "comba-prod",
           "database_id": "REPLACE_WITH_PROD_D1_DATABASE_ID",
-          "migrations_dir": "resources/migrations",
-        },
+          "migrations_dir": "resources/migrations"
+        }
       ],
       "kv_namespaces": [
         {
           "binding": "LEADERBOARD_LIST",
-          "id": "REPLACE_WITH_PROD_LEADERBOARD_LIST_ID",
-        },
+          "id": "REPLACE_WITH_DEV_LEADERBOARD_LIST_ID"
+        }
       ],
       "vars": {
         "APP_ENV": "prod",
         "COMBA_CHANNEL_ID": "REPLACE_WITH_PROD_SLACK_CHANNEL_ID",
-        "COMBA_ADMIN_USER_IDS": "REPLACE_WITH_PROD_ADMIN_USER_IDS",
+        "COMBA_ADMIN_USER_IDS": "REPLACE_WITH_PROD_ADMIN_USER_IDS"
       },
-      "triggers": { "crons": ["0 * * * *"] },
-    },
-  },
+      "triggers": { "crons": ["0 * * * *"] }
+    }
+  }
 }
