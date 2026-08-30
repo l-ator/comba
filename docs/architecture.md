@@ -1,105 +1,42 @@
-# Initial architecture
+# Ċomba architecture
 
-## Product identities
+## Runtime and ownership
 
-- Slack app: **Ċomba**
-- Bot display name: **Ċombot 🤖**
-- Package and internal identifiers: ASCII names such as `comba` and `combot`
+Slack sends signed commands, block actions, and modal submissions to a Hono application in a Cloudflare Worker. Every invocation creates and disposes a TSyringe child container containing that invocation's `Env`, bindings, clients, repositories, services, and handlers. Only the Worker/composition boundary resolves from the container; application code uses constructor injection.
 
-## Runtime
+One `DurableOjbectSessionRoom` Durable Object, named by `workspaceId:channelId`, is authoritative for the channel's live lobby. It serializes joins, switches, bench actions, result submission, and expiry. Its alarm expires live state and retries its archive outbox.
 
-Slack sends slash commands, button actions, and modal submissions to a Cloudflare Worker over HTTPS. The Worker validates every Slack signature before dispatching to a thin transport handler.
+D1 contains completed games and participants only. Statistics, head-to-head comparisons, leaderboards, and historical result edits query these immutable-history-oriented tables. Initial result submission snapshots the live session into the DO outbox and immediately frees the channel; historical edits use D1 after archival. An edit that arrives while archival is pending updates the outbox snapshot instead.
 
-Cloudflare D1 is authoritative. Slack messages are projections of database state and may be repaired after transient Slack API failures. A Cron Trigger finds overdue open sessions and marks them expired. Every interaction also enforces `expires_at`, so the cron schedule is not an authorization boundary.
+Slack messages are projections. Every accepted join or bench action updates the original lobby message. Expired lobby projections are retained in a Durable Object outbox and retried by its alarm after transient Slack failures. Result amendments are announced in that message's thread and mention every participant.
 
-## Planned source tree
+## Source boundaries
 
 ```text
 src/
-  index.ts                   Worker entry point and routing
-  config.ts                  Typed environment bindings
-  slack/
-    verify-request.ts        Slack signature and replay validation
-    commands/comba.ts        /comba command parsing
-    actions/lobby.ts         Join, leave, and cancel actions
-    actions/results.ts       Result modal actions
-    views/lobby.ts           Block Kit lobby rendering
-    views/result-modal.ts    Result entry/edit modal
-    client.ts                Small Slack Web API client
-  domain/
-    sessions/service.ts      Session lifecycle and invariants
-    results/service.ts       Submission, editing, and authorization
-    statistics/service.ts    Historical aggregate queries
-    errors.ts                Transport-independent domain failures
-  persistence/
-    schema.ts                Drizzle/D1 schema
-    sessions.ts              Transactional session repository
-    results.ts               Result repository
-    statistics.ts            Read-only statistics queries
-  jobs/
-    expire-sessions.ts       Durable timeout sweep
-    reconcile-messages.ts    Repair Slack views after API failures
-migrations/                  D1 SQL migrations
-test/
-  domain/                    Fast business-rule tests
-  persistence/               D1-backed constraint/concurrency tests
-  slack/                     Signed request and interaction tests
-docs/                        Architecture, decisions, and setup
+  worker/                          Worker entry point and DI composition root
+  comba/
+    domain/                        Session, result, and statistics rules/models
+    application/                   Use cases, ports, and presentation models
+    infrastructure/
+      cloudflare/                  Durable Object and invocation-bound adapter
+      d1/                          Historical persistence adapters
+      slack/                       Slack Web API adapter
+    presentation/slack/            Commands, interactions, schemas, and views
+  shared/                          Cross-cutting DI and observability utilities
+migrations/                        D1 history schema and legacy backfill
+test/                              Unit and Cloudflare integration tests
 ```
 
-The exact files will be introduced incrementally; directories are not created merely to make the repository look complete.
+Dependencies point inward: presentation and infrastructure depend on application ports and domain types; application depends on domain and its own ports; domain has no adapter or Worker dependencies. `worker/container.ts` is the HTTP invocation composition root. The Durable Object constructor is a second Cloudflare-managed composition boundary for its alarm/outbox collaborators.
 
-## Initial data model
+## Behavioral rules
 
-### sessions
-
-- `id`
-- `workspace_id`
-- `channel_id`
-- `message_ts`
-- `creator_user_id`
-- `status`: `OPEN`, `READY`, `COMPLETED`, `CANCELLED`, `EXPIRED`
-- `created_at`, `expires_at`, `ready_at`, `completed_at`
-- message reconciliation metadata
-
-### session_participants
-
-- `session_id`
-- `workspace_id`
-- `user_id`
-- `team`: `A` or `B`
-- `position`: `1` or `2`
-- `joined_at`
-
-Unique constraints prevent duplicate participants and duplicate team positions. Assigning explicit positions makes team capacity enforceable by the database, including under concurrent clicks.
-
-### results
-
-- `session_id` (unique)
-- `team_a_wins`, `team_b_wins`
-- `submitted_by`, `updated_by`
-- `created_at`, `updated_at`
-
-Statistics are derived from these historical rows. Results can therefore be corrected without compensating player counters.
-
-## Slack surface
-
-- `/comba`: start a lobby in the configured channel
-- Message actions: join Team A, join Team B, leave, cancel
-- Result modal: record or correct the aggregate score
-- `/comba history`: recent and unresolved sessions
-- `/comba stats [@user]`
-- `/comba h2h @user`
-- `/comba leaderboard`
-
-The app is installed at workspace level but v1 is restricted in application code to one configured channel. Ċombot is invited to that channel and does not request channel-history access.
-
-## Important defaults
-
-- Creator leaving cancels an open lobby.
-- Only participants may submit or edit a result.
-- Ties are valid; `0–0` is invalid.
-- `READY` means four finalized participants and no result; no separate persisted `AWAITING_RESULT` state is needed.
-- Official sessions-played statistics count completed sessions only.
-- Streaks are session-based because aggregate scores cannot reconstruct game ordering.
-
+- A channel has at most one live session.
+- Teams A and B each have two stable positions.
+- Users may switch directly into an available position on the other team.
+- `Bench me` removes the caller; a non-player receives an ephemeral response.
+- Benching the creator ends the lobby; there is no explicit cancel interaction.
+- Only participants may submit or amend results.
+- A session holds at most ten individual games; `0–0` is invalid.
+- Statistics count individual games only. A session is merely their container.

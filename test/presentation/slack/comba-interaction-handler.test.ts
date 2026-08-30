@@ -232,7 +232,7 @@ describe("CombaInteractionHandler", () => {
 
   it("leaves a failed Slack projection dirty for reconciliation", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const { dependencies, sessionService, slackClient } = setup();
+    const { dependencies, slackClient } = setup();
     vi.mocked(slackClient.updateMessage).mockRejectedValueOnce(
       new Error("Slack unavailable"),
     );
