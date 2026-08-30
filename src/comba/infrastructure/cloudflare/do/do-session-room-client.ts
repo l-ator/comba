@@ -51,6 +51,10 @@ export class DoSessionRoomClient implements SessionRoomPort {
     return this.room(workspaceId, channelId).bench(sessionId, userId);
   }
 
+  cancelActive(workspaceId: string, channelId: string) {
+    return this.room(workspaceId, channelId).cancelActive();
+  }
+
   prepareResult(
     workspaceId: string,
     channelId: string,

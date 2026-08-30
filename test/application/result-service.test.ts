@@ -54,6 +54,50 @@ describe("ResultService", () => {
     expect(mutation.state.result).toMatchObject({ teamAWins: 3, teamBWins: 1 });
   });
 
+  it("keeps a persisted historical amendment successful when List sync fails", async () => {
+    const previous = game();
+    const current = { ...previous, scores: { A: 3, B: 1 } };
+    const missing = {
+      error: { code: "SESSION_NOT_FOUND" as const, message: "not active" },
+      ok: false as const,
+    };
+    const rooms = {
+      amendPending: vi.fn(async () => missing),
+      complete: vi.fn(async () => missing),
+    };
+    const history = {
+      amend: vi.fn(async () => ({ current, previous })),
+    };
+    const leaderboardLists = {
+      sync: vi.fn(async () => {
+        throw new Error("lists_disabled_user_team");
+      }),
+    };
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const service = new ResultService(
+      rooms as unknown as SessionRoomPort,
+      history as unknown as GameHistoryPort,
+      () => new Date("2026-08-29T19:00:00.000Z"),
+      leaderboardLists as never,
+    );
+
+    await expect(service.record(input(3, 1))).resolves.toMatchObject({
+      state: { result: { teamAWins: 3, teamBWins: 1 } },
+    });
+    expect(leaderboardLists.sync).toHaveBeenCalledWith(
+      "T-PERSONAL",
+      "C-COMBA",
+    );
+    expect(error).toHaveBeenCalledWith(
+      "Failed to synchronize Ċomba leaderboard after amendment",
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: "lists_disabled_user_team",
+        }),
+      }),
+    );
+  });
+
   it.each([
     [-1, 2],
     [1.5, 2],
@@ -75,6 +119,7 @@ function createService(rooms: object, history: object): ResultService {
     rooms as SessionRoomPort,
     history as GameHistoryPort,
     () => new Date("2026-08-29T19:00:00.000Z"),
+    { sync: vi.fn(async () => undefined) } as never,
   );
 }
 

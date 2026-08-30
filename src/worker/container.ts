@@ -9,6 +9,9 @@ import { D1GameHistoryRepository } from "@comba/infrastructure/cloudflare/d1/gam
 import { DoSessionRoomClient } from "@comba/infrastructure/cloudflare/do/do-session-room-client";
 import { HttpSlackClient } from "@comba/infrastructure/slack/http-slack-client";
 import type { SlackClient } from "@comba/presentation/slack/slack-client";
+import type { LeaderboardListPort } from "@comba/application/ports/leaderboard-list";
+import type { LeaderboardListRepository } from "@comba/application/ports/leaderboard-list-repository";
+import { KVLeaderboardListRepository } from "@comba/infrastructure/cloudflare/kv/leaderboard-list-repository";
 import type { Env } from "./env";
 
 export function createInvocationContainer(env: Env): DependencyContainer {
@@ -16,8 +19,19 @@ export function createInvocationContainer(env: Env): DependencyContainer {
 
   scope.register(TOKENS.env, { useValue: env });
   scope.register(TOKENS.database, { useValue: env.DB });
+  scope.register(TOKENS.leaderboardListStorage, {
+    useValue: env.LEADERBOARD_LIST,
+  });
   scope.register(TOKENS.allowedChannelId, {
     useValue: env.COMBA_CHANNEL_ID,
+  });
+  scope.register(TOKENS.adminUserIds, {
+    useValue: new Set(
+      (env.COMBA_ADMIN_USER_IDS ?? "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
+    ),
   });
   scope.register(TOKENS.slackBotToken, { useValue: env.SLACK_BOT_TOKEN });
   scope.register(TOKENS.fetch, {
@@ -36,7 +50,13 @@ export function createInvocationContainer(env: Env): DependencyContainer {
     useClass: DoSessionRoomClient,
   });
   scope.register<SlackClient>(TOKENS.slackClient, {
-    useClass: HttpSlackClient,
+    useToken: HttpSlackClient,
+  });
+  scope.register<LeaderboardListPort>(TOKENS.leaderboardList, {
+    useToken: HttpSlackClient,
+  });
+  scope.register<LeaderboardListRepository>(TOKENS.leaderboardListRepository, {
+    useClass: KVLeaderboardListRepository,
   });
 
   return scope;

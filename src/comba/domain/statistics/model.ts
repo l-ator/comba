@@ -5,8 +5,22 @@ export interface PlayerStatistics {
   gameWinRate: number;
 }
 
+export interface PlayerStats extends PlayerStatistics {
+  relational?: RelationalStats;
+}
+
+export interface RelationalStats {
+  bestTeammate: string | null;
+  gamesPlayedTogether: number;
+  nemesis: string | null;
+  nemesisCount: number;
+  victim: string | null;
+  victimCount: number;
+}
+
 export interface LeaderboardEntry extends PlayerStatistics {
   playerId: string;
+  relational?: RelationalStats;
 }
 
 export interface Leaderboard {

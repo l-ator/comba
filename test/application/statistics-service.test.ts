@@ -41,6 +41,14 @@ describe("StatisticsService", () => {
       { gamesLost: 2, gamesPlayed: 10, gamesWon: 8, playerId: "U-ALICE" },
       { gamesLost: 4, gamesPlayed: 10, gamesWon: 6, playerId: "U-MARIO" },
     ];
+    data.getRelationalLeaderboard = async () => [
+      {
+        playerId: "U-ALICE",
+        bestTeammate: { gamesPlayedNeedle: 4, gamesWonWith: 4, partnerId: "U-MARIO" },
+        nemesis: { count: 2, opponentId: "U-BOB" },
+        victim: { count: 3, opponentId: "U-MARIO" },
+      },
+    ];
     const leaderboard = await new StatisticsService(data).getLeaderboard("T");
     expect(leaderboard.players.map((player) => player.playerId)).toEqual([
       "U-ALICE",
@@ -50,6 +58,15 @@ describe("StatisticsService", () => {
     expect(leaderboard.biggestWinRatio?.playerId).toBe("U-ALICE");
     expect(leaderboard.biggestLossRatio?.playerId).toBe("U-BOB");
     expect(leaderboard.mostGames?.gamesPlayed).toBe(10);
+    expect(leaderboard.players[0]!.relational).toEqual({
+      bestTeammate: "U-MARIO",
+      gamesPlayedTogether: 4,
+      nemesis: "U-BOB",
+      nemesisCount: 2,
+      victim: "U-MARIO",
+      victimCount: 3,
+    });
+    expect(leaderboard.players[1]!.relational).toBeUndefined();
   });
 });
 
@@ -66,6 +83,7 @@ function repository(): StatisticsRepository {
       gamesPlayed: 10,
       gamesWon: 6,
     }),
+    getRelationalLeaderboard: async () => [],
     getTeammateStatistics: async () => ({
       gamesLostTogether: 4,
       gamesPlayedTogether: 10,

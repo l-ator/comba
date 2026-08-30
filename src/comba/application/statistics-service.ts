@@ -5,9 +5,14 @@ import type {
   HeadToHeadStatistics,
   Leaderboard,
   PlayerStatistics,
+  PlayerStats,
+  RelationalStats,
   TeammateStatistics,
 } from "@comba/domain/statistics/model";
-import type { StatisticsRepository } from "./ports/statistics-repository";
+import type {
+  RelationalLeaderboardEntry,
+  StatisticsRepository,
+} from "./ports/statistics-repository";
 
 @scoped(Lifecycle.ContainerScoped)
 export class StatisticsService {
@@ -19,24 +24,41 @@ export class StatisticsService {
   async getPlayerStats(
     workspaceId: string,
     playerId: string,
-  ): Promise<PlayerStatistics> {
-    const totals = await this.repository.getPlayerStatistics(
-      workspaceId,
-      playerId,
+  ): Promise<PlayerStats> {
+    const [totals, relational] = await Promise.all([
+      this.repository.getPlayerStatistics(workspaceId, playerId),
+      this.repository.getRelationalLeaderboard(workspaceId),
+    ]);
+    const rel = relationalStats(
+      relational.find((entry) => entry.playerId === playerId),
     );
 
     return {
       ...totals,
       gameWinRate: percentage(totals.gamesWon, totals.gamesPlayed),
+      ...(rel ? { relational: rel } : {}),
     };
   }
 
   async getLeaderboard(workspaceId: string): Promise<Leaderboard> {
-    const players = (await this.repository.getLeaderboard(workspaceId))
-      .map((player) => ({
-        ...player,
-        gameWinRate: percentage(player.gamesWon, player.gamesPlayed),
-      }))
+    const [rawPlayers, relational] = await Promise.all([
+      this.repository.getLeaderboard(workspaceId),
+      this.repository.getRelationalLeaderboard(workspaceId),
+    ]);
+    const relationalByPlayer = new Map(
+      relational.map((entry) => [entry.playerId, entry]),
+    );
+    const players = rawPlayers
+      .map((player) => {
+        const rel = relationalStats(
+          relationalByPlayer.get(player.playerId),
+        );
+        return {
+          ...player,
+          gameWinRate: percentage(player.gamesWon, player.gamesPlayed),
+          ...(rel ? { relational: rel } : {}),
+        };
+      })
       .sort(
         (left, right) =>
           right.gamesWon - left.gamesWon ||
@@ -51,6 +73,20 @@ export class StatisticsService {
       biggestWinRatio: extreme(players, (player) => player.gameWinRate),
       mostGames: extreme(players, (player) => player.gamesPlayed),
       players,
+    };
+  }
+
+  async getPlayerStatsLegacy(
+    workspaceId: string,
+    playerId: string,
+  ): Promise<PlayerStats> {
+    const totals = await this.repository.getPlayerStatistics(
+      workspaceId,
+      playerId,
+    );
+    return {
+      ...totals,
+      gameWinRate: percentage(totals.gamesWon, totals.gamesPlayed),
     };
   }
 
@@ -90,6 +126,20 @@ export class StatisticsService {
       ),
     };
   }
+}
+
+function relationalStats(
+  entry: RelationalLeaderboardEntry | undefined,
+): RelationalStats | null {
+  if (!entry) return null;
+  return {
+    bestTeammate: entry.bestTeammate?.partnerId ?? null,
+    gamesPlayedTogether: entry.bestTeammate?.gamesPlayedNeedle ?? 0,
+    nemesis: entry.nemesis?.opponentId ?? null,
+    nemesisCount: entry.nemesis?.count ?? 0,
+    victim: entry.victim?.opponentId ?? null,
+    victimCount: entry.victim?.count ?? 0,
+  };
 }
 
 function extreme<T>(values: T[], score: (value: T) => number): T | null {

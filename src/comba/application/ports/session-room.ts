@@ -55,6 +55,10 @@ export interface SessionRoomPort {
     sessionId: string,
     userId: string,
   ): Promise<SessionRoomResult<BenchOutcome>>;
+  cancelActive(
+    workspaceId: string,
+    channelId: string,
+  ): Promise<SessionRoomResult<LiveSession>>;
   complete(
     workspaceId: string,
     channelId: string,

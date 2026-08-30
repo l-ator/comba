@@ -20,6 +20,24 @@ export interface TeammateRecord {
   gamesWonTogether: number;
 }
 
+export interface BestTeammateRecord {
+  gamesPlayedNeedle: number;
+  gamesWonWith: number;
+  partnerId: string;
+}
+
+export interface HeadToHeadNeedleRecord {
+  count: number;
+  opponentId: string;
+}
+
+export interface RelationalLeaderboardEntry {
+  bestTeammate: BestTeammateRecord | null;
+  nemesis: HeadToHeadNeedleRecord | null;
+  playerId: string;
+  victim: HeadToHeadNeedleRecord | null;
+}
+
 export interface StatisticsRepository {
   getLeaderboard(workspaceId: string): Promise<LeaderboardRecord[]>;
   getHeadToHead(
@@ -31,6 +49,9 @@ export interface StatisticsRepository {
     workspaceId: string,
     playerId: string,
   ): Promise<PlayerStatisticsRecord>;
+  getRelationalLeaderboard(
+    workspaceId: string,
+  ): Promise<RelationalLeaderboardEntry[]>;
   getTeammateStatistics(
     workspaceId: string,
     playerAId: string,

@@ -23,10 +23,18 @@
           "migrations_dir": "resources/migrations"
         }
       ],
+      "kv_namespaces": [
+        {
+          "binding": "LEADERBOARD_LIST",
+          "id": "62ccb3f989ea40cc85c7211db767e691"
+        }
+      ],
       "vars": {
         "APP_ENV": "development",
-        "COMBA_CHANNEL_ID": "C0BTRCY31RA"
-      }
+        "COMBA_CHANNEL_ID": "C0BTRCY31RA",
+        "COMBA_ADMIN_USER_IDS": "U0BT5BA62S3"
+      },
+      "triggers": { "crons": ["0 * * * *"] }
     },
     "prod": {
       "name": "comba",
@@ -41,10 +49,18 @@
           "migrations_dir": "resources/migrations"
         }
       ],
+      "kv_namespaces": [
+        {
+          "binding": "LEADERBOARD_LIST",
+          "id": "REPLACE_WITH_DEV_LEADERBOARD_LIST_ID"
+        }
+      ],
       "vars": {
         "APP_ENV": "prod",
-        "COMBA_CHANNEL_ID": "REPLACE_WITH_PROD_SLACK_CHANNEL_ID"
-      }
+        "COMBA_CHANNEL_ID": "REPLACE_WITH_PROD_SLACK_CHANNEL_ID",
+        "COMBA_ADMIN_USER_IDS": "REPLACE_WITH_PROD_ADMIN_USER_IDS"
+      },
+      "triggers": { "crons": ["0 * * * *"] }
     }
   }
 }

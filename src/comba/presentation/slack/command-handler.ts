@@ -4,16 +4,18 @@ import { TOKENS } from "@shared/di/tokens";
 import {
   OpenSessionExistsError,
   SessionChannelNotAllowedError,
+  SessionNotFoundError,
 } from "@comba/application/session-errors";
 import { SessionService } from "@comba/application/session-service";
 import { errorDetails } from "@shared/observability/error-details";
 import type {
   HeadToHeadStatistics,
   Leaderboard,
-  PlayerStatistics,
+  PlayerStats,
   TeammateStatistics,
 } from "@comba/domain/statistics/model";
 import { StatisticsService } from "@comba/application/statistics-service";
+import { LeaderboardListService } from "@comba/application/leaderboard-list-service";
 import type { SlackClient, SlackMessageReference } from "./slack-client";
 import type { CombaCommand } from "./schemas/command";
 import { renderOpenLobby } from "./views/lobby";
@@ -25,10 +27,46 @@ export class CombaCommandHandler {
     @inject(StatisticsService)
     private readonly statisticsService: StatisticsService,
     @inject(TOKENS.slackClient) private readonly slackClient: SlackClient,
+    @inject(LeaderboardListService)
+    private readonly leaderboardLists: LeaderboardListService,
+    @inject(TOKENS.adminUserIds)
+    private readonly adminUserIds: Set<string>,
   ) {}
 
   async handle(command: CombaCommand): Promise<Response> {
     const subcommand = parseSubcommand(command.text);
+    if (subcommand.type === "admin-list-sync") {
+      if (!this.adminUserIds.has(command.user_id))
+        return ephemeral(
+          "Only a Ċomba administrator can synchronize the leaderboard List.",
+        );
+      const result = await this.leaderboardLists.sync(
+        command.team_id,
+        command.channel_id,
+        command.channel_name,
+      );
+      return ephemeral(
+        `${result.created ? "Created" : "Reused"} Ċomba Leaderboard ${result.listId}; wrote ${result.rows} rows at ${result.syncedAt}. Add/select the List in this channel's tabs if Slack does not show it automatically.`,
+      );
+    }
+    if (subcommand.type === "admin-abort") {
+      if (!this.adminUserIds.has(command.user_id))
+        return ephemeral(
+          "Only a Ċomba administrator can abort a running session.",
+        );
+      try {
+        await this.sessionService.abortActive(
+          command.team_id,
+          command.channel_id,
+        );
+      } catch (error) {
+        if (error instanceof SessionNotFoundError) {
+          return ephemeral(error.message);
+        }
+        throw error;
+      }
+      return ephemeral("Cancelled the running Ċomba in this channel.");
+    }
     if (subcommand.type === "leaderboard") {
       return ephemeral(
         renderLeaderboard(
@@ -165,7 +203,9 @@ type ParsedSubcommand =
   | { playerId?: string; type: "stats" }
   | { type: "start" }
   | { type: "help" }
-  | { type: "leaderboard" };
+  | { type: "leaderboard" }
+  | { type: "admin-abort" }
+  | { type: "admin-list-sync" };
 
 function parseSubcommand(text: string): ParsedSubcommand {
   const normalized = text.trim();
@@ -174,6 +214,14 @@ function parseSubcommand(text: string): ParsedSubcommand {
   }
 
   const [name, ...arguments_] = normalized.split(/\s+/);
+  if (name === "admin" && arguments_.join(" ") === "list sync")
+    return { type: "admin-list-sync" };
+  if (
+    name === "admin" &&
+    (arguments_.join(" ") === "cancel" || arguments_.join(" ") === "abort")
+  ) {
+    return { type: "admin-abort" };
+  }
   if (name === "leaderboard" && arguments_.length === 0) {
     return { type: "leaderboard" };
   }
@@ -200,12 +248,30 @@ function slackMentionId(value: string): string | null {
   return /^<@([A-Z0-9]+)(?:\|[^>]+)?>$/.exec(value)?.[1] ?? null;
 }
 
-function renderPlayerStats(playerId: string, stats: PlayerStatistics): string {
-  return [
+function renderPlayerStats(
+  playerId: string,
+  stats: PlayerStats,
+): string {
+  const lines = [
     `⚽ *<@${playerId}>*`,
     `Games: *${stats.gamesPlayed}* · Won: *${stats.gamesWon}* · Lost: *${stats.gamesLost}*`,
     `Game win rate: *${stats.gameWinRate.toFixed(1)}%*`,
-  ].join("\n");
+  ];
+  const rel = stats.relational;
+  if (rel) {
+    if (rel.bestTeammate) {
+      lines.push(
+        `🤝 Best teammate: <@${rel.bestTeammate}> (${rel.gamesPlayedTogether} games together)`,
+      );
+    }
+    if (rel.nemesis) {
+      lines.push(`😈 Nemesis: <@${rel.nemesis}> (lost ${rel.nemesisCount}×)`);
+    }
+    if (rel.victim) {
+      lines.push(`🎯 Victim: <@${rel.victim}> (beaten ${rel.victimCount}×)`);
+    }
+  }
+  return lines.join("\n");
 }
 
 function renderLeaderboard(leaderboard: Leaderboard): string {
