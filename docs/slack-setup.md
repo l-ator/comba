@@ -32,11 +32,11 @@ Deploy once to obtain the public Worker URL:
 npm run deploy:dev
 ```
 
-Replace both `REPLACE_WITH_WORKER_URL` placeholders in `slack/manifest.yaml` with that hostname.
+Replace both `REPLACE_WITH_WORKER_URL` placeholders in `../resources/slack/manifest.yaml` with that hostname.
 
 ## 3. Personal Slack app
 
-At Slack's app management page, create an app from `slack/manifest.yaml` in the personal test workspace.
+At Slack's app management page, create an app from `../resources/slack/manifest.yaml` in the personal test workspace.
 
 The manifest configures:
 
@@ -83,7 +83,7 @@ npx wrangler secret put SLACK_BOT_TOKEN --env prod
 npm run deploy:prod
 ```
 
-Create the prod Slack app from `slack/manifest.prod.yaml` after replacing `REPLACE_WITH_PROD_WORKER_URL`. Development and prod credentials are intentionally independent.
+Create the prod Slack app from `../resources/slack/manifest.prod.yaml` after replacing `REPLACE_WITH_PROD_WORKER_URL`. Development and prod credentials are intentionally independent.
 
 ## 5. Smoke test
 

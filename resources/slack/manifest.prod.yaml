@@ -5,11 +5,11 @@ display_information:
 
 features:
   bot_user:
-    display_name: "Ċombot 🤖"
+    display_name: "Combot"
     always_online: false
   slash_commands:
     - command: /comba
-      url: https://comba-dev.comba.workers.dev/slack/commands
+      url: https://REPLACE_WITH_PROD_WORKER_URL/slack/commands
       description: Start a Ċomba session or view stats
       usage_hint: "[stats | h2h | leaderboard | history]"
       should_escape: true
@@ -23,7 +23,7 @@ oauth_config:
 settings:
   interactivity:
     is_enabled: true
-    request_url: https://comba-dev.comba.workers.dev/slack/interactions
+    request_url: https://REPLACE_WITH_PROD_WORKER_URL/slack/interactions
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false

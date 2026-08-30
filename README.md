@@ -57,7 +57,7 @@ Before deployment, replace these values:
 
 - `database_id` in `wrangler.jsonc`, after creating the development D1 database.
 - `COMBA_CHANNEL_ID` in `wrangler.jsonc` with the personal Slack test channel ID.
-- `REPLACE_WITH_WORKER_URL` in `slack/manifest.yaml` with the deployed Worker hostname.
+- `REPLACE_WITH_WORKER_URL` in `resources/slack/manifest.yaml` with the deployed Worker hostname.
 - `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN` through Wrangler secrets.
 
 See [`docs/slack-setup.md`](./docs/slack-setup.md) for the complete sequence.
