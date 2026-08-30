@@ -119,14 +119,11 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
     const keys: Array<
       [keyof LeaderboardListColumns, string, string, boolean?]
     > = [
-      ["standing", "standing", "Standing", true],
+      ["record", "record", "P - W - L", true],
       ["player", "player", "Player"],
       ["rank", "rank", "Rank"],
-      ["played", "played", "Played"],
-      ["won", "won", "Won"],
-      ["lost", "lost", "Lost"],
       ["winRate", "win_rate", "Win rate"],
-      ["lastUpdated", "last_updated", "Last updated"],
+      ["form", "form", "Form"],
       ["teammate", "teammate", "Best teammate"],
       ["nemesis", "nemesis", "Nemesis"],
       ["victim", "victim", "Victim"],
@@ -142,23 +139,18 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
           property === "nemesis" ||
           property === "victim"
             ? "user"
-            : property === "lastUpdated"
-              ? "date"
-              : property === "rank" ||
-                  property === "played" ||
-                  property === "won" ||
-                  property === "lost" ||
-                  property === "winRate"
-                ? "number"
-                : "text",
+            : property === "rank"
+              ? "number"
+              : "text",
         ...(primary ? { is_primary_column: true } : {}),
         ...(property === "player" ||
         property === "teammate" ||
         property === "nemesis" ||
         property === "victim"
           ? { options: { format: "single_entity" } }
-          : {}),
-        ...(property === "winRate" ? { options: { precision: 1 } } : {}),
+          : property === "rank"
+            ? { options: { precision: 0 } }
+            : {}),
       })),
     });
     const parsed = z
@@ -176,14 +168,11 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
     return {
       listId: parsed.list_id,
       columns: {
-        standing: requiredColumn(byKey, "standing"),
+        record: requiredColumn(byKey, "record"),
         player: requiredColumn(byKey, "player"),
         rank: requiredColumn(byKey, "rank"),
-        played: requiredColumn(byKey, "played"),
-        won: requiredColumn(byKey, "won"),
-        lost: requiredColumn(byKey, "lost"),
         winRate: requiredColumn(byKey, "win_rate"),
-        lastUpdated: requiredColumn(byKey, "last_updated"),
+        form: requiredColumn(byKey, "form"),
         teammate: requiredColumn(byKey, "teammate"),
         nemesis: requiredColumn(byKey, "nemesis"),
         victim: requiredColumn(byKey, "victim"),
@@ -247,16 +236,16 @@ export class HttpSlackClient implements SlackClient, LeaderboardListPort {
     for (const row of rows) {
       const fields = [
         {
-          column_id: definition.columns.standing,
-          rich_text: richText(row.standing),
+          column_id: definition.columns.record,
+          rich_text: richText(row.record),
         },
         { column_id: definition.columns.player, user: [row.playerId] },
         { column_id: definition.columns.rank, number: [row.rank] },
-        { column_id: definition.columns.played, number: [row.gamesPlayed] },
-        { column_id: definition.columns.won, number: [row.gamesWon] },
-        { column_id: definition.columns.lost, number: [row.gamesLost] },
-        { column_id: definition.columns.winRate, number: [row.gameWinRate] },
-        { column_id: definition.columns.lastUpdated, date: [row.updatedOn] },
+        {
+          column_id: definition.columns.winRate,
+          rich_text: richText(`${formatPercent(row.gameWinRate)}%`),
+        },
+        { column_id: definition.columns.form, rich_text: formRichText(row.form) },
         ...(row.teammate
           ? [{ column_id: definition.columns.teammate, user: [row.teammate] }]
           : []),
@@ -342,6 +331,31 @@ function richText(text: string) {
       type: "rich_text",
       elements: [
         { type: "rich_text_section", elements: [{ type: "text", text }] },
+      ],
+    },
+  ];
+}
+
+function formatPercent(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function formRichText(form: string) {
+  const names = form.split(" ").filter((name) => name.length > 0);
+  const elements: Array<
+    | { name: string; type: "emoji" }
+    | { text: string; type: "text" }
+  > = [];
+  names.forEach((name, index) => {
+    if (index > 0) elements.push({ text: " ", type: "text" });
+    elements.push({ name, type: "emoji" });
+  });
+  return [
+    {
+      type: "rich_text",
+      elements: [
+        { type: "rich_text_section", elements },
       ],
     },
   ];

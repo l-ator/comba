@@ -4,17 +4,14 @@ import { LeaderboardListService } from "@comba/application/leaderboard-list-serv
 import { LeaderboardListNotFoundError } from "@comba/application/ports/leaderboard-list";
 
 const columns = {
-  lastUpdated: "last",
-  lost: "lost",
+  form: "form",
   nemesis: "nemesis",
-  played: "played",
   player: "player",
   rank: "rank",
-  standing: "standing",
+  record: "record",
   teammate: "teammate",
   victim: "victim",
   winRate: "rate",
-  won: "won",
 };
 
 describe("LeaderboardListService", () => {
@@ -26,7 +23,14 @@ describe("LeaderboardListService", () => {
     expect(lists.grantChannelReadAccess).toHaveBeenCalledWith("F1", "C1");
     expect(lists.writeSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ listId: "F1" }),
-      [expect.objectContaining({ playerId: "U1", rank: 1, standing: "🥇" })],
+      [
+        expect.objectContaining({
+          playerId: "U1",
+          rank: 1,
+          record: "4 - 3 - 1 🥇",
+          form: "large_green_circle large_green_circle red_circle",
+        }),
+      ],
     );
     expect(repository.markSynced).toHaveBeenCalled();
     expect(repository.save).toHaveBeenCalledWith(
@@ -116,6 +120,11 @@ function setup(
       mostGames: null,
       players,
     })),
+    getRecentForm: vi.fn(async () => [
+      "large_green_circle",
+      "large_green_circle",
+      "red_circle",
+    ]),
   };
   const lists = {
     create: vi.fn(async () => ({ columns, listId: "F1" })),

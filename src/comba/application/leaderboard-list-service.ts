@@ -61,15 +61,28 @@ export class LeaderboardListService {
 
     const leaderboard = await this.statistics.getLeaderboard(workspaceId);
     const syncedAt = this.now().toISOString();
-    const rows: LeaderboardListRow[] = leaderboard.players.map(
-      (player, index) => ({
-        ...player,
-        rank: index + 1,
-        standing: standing(index + 1, leaderboard.players.length),
-        teammate: player.relational?.bestTeammate ?? "",
-        nemesis: player.relational?.nemesis ?? "",
-        victim: player.relational?.victim ?? "",
-        updatedOn: syncedAt.slice(0, 10),
+    const rows: LeaderboardListRow[] = await Promise.all(
+      leaderboard.players.map(async (player, index) => {
+        const form = await this.statistics.getRecentForm(
+          workspaceId,
+          player.playerId,
+        );
+        return {
+          ...player,
+          rank: index + 1,
+          playerCount: leaderboard.players.length,
+          record: record(
+            player.gamesPlayed,
+            player.gamesWon,
+            player.gamesLost,
+            index + 1,
+            leaderboard.players.length,
+          ),
+          teammate: player.relational?.bestTeammate ?? "",
+          nemesis: player.relational?.nemesis ?? "",
+          victim: player.relational?.victim ?? "",
+          form: form.join(" "),
+        };
       }),
     );
     if (rowIds.length) await this.lists.deleteRows(stored.listId, rowIds);
@@ -92,9 +105,14 @@ function listName(channelName?: string): string {
     : "Ċomba Leaderboard";
 }
 
-function standing(rank: number, playerCount: number): string {
+function record(
+  played: number,
+  won: number,
+  lost: number,
+  rank: number,
+  playerCount: number,
+): string {
   const medal = ["🥇", "🥈", "🥉"][rank - 1];
-  if (medal) return medal;
-  if (playerCount > 1 && rank === playerCount) return "💩";
-  return `#${rank}`;
+  const emoji = medal ?? (playerCount > 1 && rank === playerCount ? "💩" : "");
+  return `${played} - ${won} - ${lost}${emoji ? ` ${emoji}` : ""}`;
 }

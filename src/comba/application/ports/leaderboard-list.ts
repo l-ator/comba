@@ -1,14 +1,11 @@
 import type { LeaderboardEntry } from "@comba/domain/statistics/model";
 
 export interface LeaderboardListColumns {
-  standing: string;
+  record: string;
   player: string;
   rank: string;
-  played: string;
-  won: string;
-  lost: string;
   winRate: string;
-  lastUpdated: string;
+  form: string;
   teammate: string;
   nemesis: string;
   victim: string;
@@ -20,14 +17,14 @@ export interface LeaderboardListDefinition {
 }
 
 export interface LeaderboardListRow extends LeaderboardEntry {
+  form: string;
   nemesis: string;
   rank: number;
-  standing: string;
+  playerCount: number;
+  record: string;
   teammate: string;
-  updatedOn: string;
   victim: string;
 }
-
 export class LeaderboardListNotFoundError extends Error {
   constructor() {
     super("The configured Slack leaderboard List no longer exists.");

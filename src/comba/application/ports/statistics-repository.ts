@@ -1,3 +1,5 @@
+import type { Team } from "@comba/domain/session/model";
+
 export interface PlayerStatisticsRecord {
   gamesLost: number;
   gamesPlayed: number;
@@ -31,6 +33,14 @@ export interface HeadToHeadNeedleRecord {
   opponentId: string;
 }
 
+export interface GameOutcomeRecord {
+  gameId: string;
+  teams: Team[];
+  won: number;
+  scores: Record<string, number>;
+  completedAt: string;
+}
+
 export interface RelationalLeaderboardEntry {
   bestTeammate: BestTeammateRecord | null;
   nemesis: HeadToHeadNeedleRecord | null;
@@ -52,6 +62,11 @@ export interface StatisticsRepository {
   getRelationalLeaderboard(
     workspaceId: string,
   ): Promise<RelationalLeaderboardEntry[]>;
+  getRecentGames(
+    workspaceId: string,
+    playerId: string,
+    limit: number,
+  ): Promise<GameOutcomeRecord[]>;
   getTeammateStatistics(
     workspaceId: string,
     playerAId: string,

@@ -68,6 +68,28 @@ describe("StatisticsService", () => {
     });
     expect(leaderboard.players[1]!.relational).toBeUndefined();
   });
+
+  it("expands each session into per-game win/loss circles newest-first", async () => {
+    const data = repository();
+    const teamA = (players: string[]) => ({
+      id: "A",
+      players: players.map((userId) => ({ joinedAt: "2026-08-30", position: 0, userId })),
+    });
+    data.getRecentGames = async () => [
+      { completedAt: "2026-08-30", gameId: "g3", scores: { A: 2, B: 1 }, teams: [teamA(["U1"])], won: 0 },
+      { completedAt: "2026-08-29", gameId: "g2", scores: { A: 0, B: 3 }, teams: [teamA(["U1"])], won: 1 },
+      { completedAt: "2026-08-28", gameId: "g1", scores: { A: 1, B: 0 }, teams: [teamA(["U1"])], won: 1 },
+    ];
+    const service = new StatisticsService(data);
+
+    await expect(service.getRecentForm("T", "U1")).resolves.toEqual([
+      "red_circle",
+      "large_green_circle",
+      "large_green_circle",
+      "red_circle",
+      "red_circle",
+    ]);
+  });
 });
 
 function repository(): StatisticsRepository {
@@ -89,5 +111,6 @@ function repository(): StatisticsRepository {
       gamesPlayedTogether: 10,
       gamesWonTogether: 6,
     }),
+    getRecentGames: async () => [],
   };
 }
