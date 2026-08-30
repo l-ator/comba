@@ -88,11 +88,13 @@ export function renderOpenLobby(
         ],
         type: "actions",
       },
+      { type: "divider" },
       {
         elements: [
           markdown(
             `${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining · closes <t:${expiresAt}:R>`,
           ),
+          markdown(`Created by <@${session.creatorUserId}>`),
         ],
         type: "context",
       },
@@ -166,6 +168,13 @@ function renderReadyLobby(state: SessionWithParticipants): SlackMessageView {
         ],
         type: "actions",
       },
+      { type: "divider" },
+      {
+        elements: [
+          markdown(`Full lobby · hit *Record result* when the match is done`),
+        ],
+        type: "context",
+      },
     ],
     text: `🔥 Ċomba is on: ${mentions(state.participants, "A")} vs ${mentions(state.participants, "B")}`,
   };
@@ -199,6 +208,15 @@ function renderCompletedSession(
           ),
         ],
         type: "actions",
+      },
+      { type: "divider" },
+      {
+        elements: [
+          markdown(
+            `${mentions(state.participants, "A")}  *${result.teamAWins}*   ·   *${result.teamBWins}*  ${mentions(state.participants, "B")}`,
+          ),
+        ],
+        type: "context",
       },
     ],
     text: `🏁 Final result: ${mentions(state.participants, "A")} ${result.teamAWins}–${result.teamBWins} ${mentions(state.participants, "B")}`,
