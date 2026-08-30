@@ -70,7 +70,6 @@ export function renderOpenLobby(
 ): SlackMessageView {
   const { participants, session } = state;
   const spotsRemaining = 4 - participants.length;
-  const expiresAt = Math.floor(new Date(session.expiresAt).getTime() / 1_000);
 
   return {
     blocks: [
@@ -93,7 +92,7 @@ export function renderOpenLobby(
           {
             elements: [
               markdown(
-                `${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining · closes <t:${expiresAt}:R> · created by <@${session.creatorUserId}>`,
+                `${spotsRemaining} ${spotsRemaining === 1 ? "spot" : "spots"} remaining · ${closesInLabel(session.expiresAt)} · created by <@${session.creatorUserId}>`,
               ),
             ],
             type: "context",
@@ -264,6 +263,11 @@ function randomLobbyTaunt(): string {
   return (
     LOBBY_TAUNTS[Math.floor(Math.random() * LOBBY_TAUNTS.length)] ?? ""
   );
+}
+
+function closesInLabel(expiresAt: string): string {
+  const unix = Math.floor(new Date(expiresAt).getTime() / 1_000);
+  return `closes <!date^${unix}^{ago}|in a few minutes>`;
 }
 
 function mentions(participants: SessionParticipant[], team: Team): string {
