@@ -30,7 +30,7 @@ export function renderResultModal(
       channelId: state.session.channelId,
       sessionId: state.session.id,
     }),
-    submit: plainText(state.result ? "Correct result" : "Record result"),
+    submit: plainText(state.result ? "Edit result" : "Record result"),
     title: plainText("Ċomba result"),
     type: "modal",
   };

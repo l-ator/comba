@@ -212,7 +212,7 @@ function renderCompletedSession(
             block_id: "comba.result.actions",
             elements: [
               button(
-                "Correct result",
+                "Edit result",
                 COMBA_INTERACTION_IDS.recordResult,
                 state.session.id,
                 "primary",
@@ -244,20 +244,20 @@ function terminalView(title: string, detail: string): SlackMessageView {
 }
 
 const LOBBY_TAUNTS = [
-  "😏 Talk is cheap. Pick a side.",
-  "👀 Scared of the table?",
-  "🔥 Come get cooked.",
-  "🫵 Don’t just lurk. Join.",
-  "😈 Pick a team and regret it.",
-  "🏆 Someone has to carry.",
-  "💀 Careers will be ended.",
-  "🤡 Confidence check starts here.",
-  "🧂 Salt incoming.",
-  "🥱 Easy win? Prove it.",
-  "🪦 Enter at your own risk.",
-  "🚑 Ego damage possible.",
-  "🎭 Big talk, tiny table.",
-  "🫣 Your excuse won’t save you.",
+  "🫵 Talk is cheap. Pick a side",
+  "👻 Scared of the table?",
+  "🧑‍🍳 Come get cooked",
+  "😈 Pick a team and regret it",
+  "⚔️ Grab a teammate – Find some rivals",
+  "🏆 Someone has to carry",
+  "💀 Careers will be ended",
+  "🤡 Confidence check starts here",
+  "🧂 Salt incoming",
+  "🪦 Enter at your own risk",
+  "🚑 Ego damage possible",
+  "🎭 Big talk – tiny table",
+  "🎰 No skill, only free spins",
+  "💩 Winners talk shit"
 ];
 
 function randomLobbyTaunt(): string {
