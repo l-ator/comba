@@ -5,7 +5,7 @@ GitHub Actions is the canonical deployment path. Local Wrangler deployment comma
 ## Pipelines
 
 - **Quality** runs `npm run check` on every pull request. It has no deployment environment or Cloudflare credentials.
-- **Deploy development** runs on every push or merge to `main`. It runs the checks, applies pending development D1 migrations, and deploys `env.dev`.
+- **Deploy development** runs on every push or merge to `main`, or when manually dispatched from any selected branch containing the workflow. It runs the checks, applies pending development D1 migrations, and deploys `env.dev`.
 - **Deploy production** is manually triggered from `main`. It runs the checks, applies pending production D1 migrations, and deploys `env.prod` behind the `prod` environment approval gate.
 - GitHub serializes deployments per environment so two migrations or deployments cannot run concurrently.
 
@@ -21,7 +21,7 @@ The token must not be committed to this repository. Slack signing and bot secret
 
 The repository uses two GitHub environments:
 
-- `dev` tracks automatic development deployments.
+- `dev` accepts automatic deployments from `main` and manual deployments from any branch. A branch deployment replaces the shared development Worker and migrates the shared development D1 database.
 - `prod` restricts deployment to `main` and provides a manual approval gate in addition to the workflow's manual trigger.
 
 ## Production deployment
