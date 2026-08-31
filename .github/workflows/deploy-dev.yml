@@ -37,6 +37,11 @@ jobs:
       - name: Run checks
         run: npm run check
 
+      - name: Verify Cloudflare authentication
+        run: |
+          npx wrangler whoami
+          npx wrangler d1 list
+
       - name: Apply development database migrations
         run: npm run db:migrate:dev
 
